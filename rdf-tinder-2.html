@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blip Cultivation Explorer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/standalone/umd/vis-network.min.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; background: #f4f7f6; }
+        header { background: #2c3e50; color: white; padding: 1rem 2rem; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        main { display: flex; flex: 1; overflow: hidden; position: relative; }
+        
+        #editor-container { width: 40%; display: flex; flex-direction: column; border-right: 2px solid #ddd; background: #fff; }
+        textarea { flex: 1; padding: 15px; font-family: 'Courier New', Courier, monospace; font-size: 14px; border: none; resize: none; outline: none; line-height: 1.5; }
+        #graph-container { width: 60%; background: #ffffff; position: relative; }
+        
+        .label { padding: 10px; background: #ecf0f1; font-weight: bold; border-bottom: 1px solid #ddd; color: #34495e; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; }
+        #network { height: 100%; width: 100%; }
+        .hint { font-size: 12px; color: #7f8c8d; padding: 10px; background: #f9f9f9; border-top: 1px solid #eee; }
+
+        /* --- Anchored Bottom-Left Widget --- */
+        #quiz-overlay {
+            position: absolute;
+            bottom: 20px; /* Anchored bottom */
+            left: 20px;   /* Anchored left */
+            width: 380px;
+            background: #ffffff;
+            border: 2px solid #3498db;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        #quiz-overlay.hidden { display: none; }
+        .quiz-header { font-size: 0.7rem; color: #3498db; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; }
+        #quiz-question { font-size: 1rem; font-weight: 600; color: #2c3e50; line-height: 1.4; }
+        .quiz-buttons { display: flex; gap: 10px; }
+        .btn { 
+            flex: 1; padding: 10px; border: none; border-radius: 6px; cursor: pointer; 
+            font-weight: bold; transition: background 0.2s; 
+        }
+        .btn-yes { background: #2ecc71; color: white; }
+        .btn-yes:hover { background: #27ae60; }
+        .btn-no { background: #e74c3c; color: white; }
+        .btn-no:hover { background: #c0392b; }
+        .quiz-progress { font-size: 10px; color: #bdc3c7; text-align: center; margin-top: 5px; }
+    </style>
+</head>
+<body>
+
+<header>
+    <h2 style="margin:0;">Blip Cultivation Explorer</h2>
+    <p style="margin:5px 0 0 0; font-size: 0.9rem; opacity: 0.8;">Defining "Moves" to help blips flourish</p>
+</header>
+
+<main>
+    <div id="editor-container">
+        <div class="label">Captured Blips (RDF Input)</div>
+        <textarea id="rdf-input" spellcheck="false">
+# Initial Blip States
+User | prioritizes | Self_Authored_Life
+Blip_Tea_Ceremony | status | Unclear_Next_Step
+Blip_Stages_of_Change | relevant_to | Timeful_Texts
+Blip_Principles | is_a | Question
+User | avoids | To_Do_Lists
+        </textarea>
+        <div class="hint">
+            <strong>Capture Rule:</strong> Use <code>Subject | Relationship | Object</code>. <br> Every fact helps the system tune your "Attentional Ecology".
+        </div>
+    </div>
+
+    <div id="graph-container">
+        <div id="network"></div>
+
+        <div id="quiz-overlay">
+            <div class="quiz-header">Move Suggestion: System Calibration</div>
+            <div id="quiz-question">Loading move...</div>
+            <div class="quiz-buttons">
+                <button class="btn btn-yes" onclick="answer(true)">YES</button>
+                <button class="btn btn-no" onclick="answer(false)">NO</button>
+            </div>
+            <div class="quiz-progress" id="quiz-progress"></div>
+        </div>
+    </div>
+</main>
+
+<script>
+    const input = document.getElementById('rdf-input');
+    const container = document.getElementById('network');
+    let network = null;
+
+    // --- Enhanced Moves based on the provided docs ---
+    const questions = [
+        { 
+            q: "Does 'Tea Ceremony' feel like it requires creative brainpower beyond your current energy?", 
+            yesFact: "Blip_Tea_Ceremony | energy_profile | High_Creativity_Required", 
+            noFact: "Blip_Tea_Ceremony | energy_profile | Low_Energy_Microtask" 
+        },
+        { 
+            q: "Should 'Stages of Change' be hidden until you explicitly mention 'Timeful Texts'?", 
+            yesFact: "Blip_Stages_of_Change | resurface_rule | Contextual_Trigger_Only", 
+            noFact: "Blip_Stages_of_Change | resurface_rule | Regular_Feed_Rotation" 
+        },
+        { 
+            q: "Is 'Learn Principles' an 'Enormous Quest' that needs breaking down into micro-tasks?", 
+            yesFact: "Blip_Principles | nature | Enormous_Quest", 
+            noFact: "Blip_Principles | nature | Atomic_Insight" 
+        },
+        { 
+            q: "Are you 'itching to spend a flow state' on your current blips using a Mac Canvas?", 
+            yesFact: "User | ready_for | Desktop_Flow_State", 
+            noFact: "User | state | Mobile_Scrolling_Mode" 
+        },
+        { 
+            q: "Does this blip feel like 'Noise and Guilt' because it lacks a clear next step?", 
+            yesFact: "Blip_Generic | feeling | Noise_and_Guilt", 
+            noFact: "Blip_Generic | feeling | Precious_Glimmer" 
+        },
+        { 
+            q: "Would you like to 'Snooze' this blip for 6 months to protect your Attentional Ecology?", 
+            yesFact: "Current_Blip | action | Long_Snooze", 
+            noFact: "Current_Blip | action | Stay_In_Rotation" 
+        }
+    ];
+
+    let currentQuestionIndex = 0;
+
+    function renderQuestion() {
+        const quizOverlay = document.getElementById('quiz-overlay');
+        const qText = document.getElementById('quiz-question');
+        const progressText = document.getElementById('quiz-progress');
+
+        if (currentQuestionIndex < questions.length) {
+            qText.innerText = questions[currentQuestionIndex].q;
+            progressText.innerText = `System Move ${currentQuestionIndex + 1} of ${questions.length}`;
+        } else {
+            quizOverlay.innerHTML = "<div class='quiz-header'>Moves Complete</div><div style='font-size:0.9rem; color:#7f8c8d'>Attentional Ecology Updated. Your blips are primed for the right energy state.</div>";
+            setTimeout(() => quizOverlay.classList.add('hidden'), 4000);
+        }
+    }
+
+    function answer(isYes) {
+        const fact = isYes ? questions[currentQuestionIndex].yesFact : questions[currentQuestionIndex].noFact;
+        input.value += `\n${fact}`;
+        currentQuestionIndex++;
+        renderQuestion();
+        updateGraph();
+    }
+
+    function updateGraph() {
+        const text = input.value;
+        const lines = text.split('\n');
+        
+        const nodesMap = new Map();
+        const edges = [];
+
+        lines.forEach((line) => {
+            if (line.trim().startsWith('#') || !line.includes('|')) return;
+            
+            const parts = line.split('|').map(p => p.trim());
+            if (parts.length >= 3) {
+                const [s, p, o] = parts;
+
+                if (!nodesMap.has(s)) nodesMap.set(s, { id: s, label: s, color: '#3498db', font: { color: 'white' }, shape: 'box' });
+                if (!nodesMap.has(o)) nodesMap.set(o, { id: o, label: o, color: '#9b59b6', font: { color: 'white' }, shape: 'box' });
+
+                edges.push({
+                    from: s,
+                    to: o,
+                    label: p,
+                    arrows: 'to',
+                    font: { align: 'top', size: 12, color: '#2c3e50' },
+                    color: { color: '#bdc3c7', highlight: '#2c3e50' }
+                });
+            }
+        });
+
+        const data = {
+            nodes: Array.from(nodesMap.values()),
+            edges: edges
+        };
+
+        const options = {
+            physics: {
+                enabled: true,
+                barnesHut: { gravitationalConstant: -2000, centralGravity: 0.3, springLength: 150 }
+            },
+            nodes: { 
+                margin: 10, 
+                borderRadius: 4,
+                font: { face: 'Inter, Arial, sans-serif', size: 14 } 
+            },
+            edges: { width: 2 }
+        };
+
+        if (network) {
+            network.setData(data);
+        } else {
+            network = new vis.Network(container, data, options);
+        }
+    }
+
+    input.addEventListener('input', updateGraph);
+    window.onload = () => {
+        updateGraph();
+        renderQuestion();
+    };
+</script>
+
+</body>
+</html>
