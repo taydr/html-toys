@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Fixed-Orb DAG Navigator</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #050508; font-family: 'Segoe UI', sans-serif; }
+        #ui { position: absolute; bottom: 30px; width: 100%; text-align: center; pointer-events: none; }
+        .label-current { color: #00f2ff; font-size: 24px; font-weight: bold; text-transform: uppercase; letter-spacing: 4px; }
+        .hint { color: rgba(255,255,255,0.4); font-size: 12px; margin-top: 5px; }
+        #back-btn { 
+            position: absolute; top: 20px; left: 20px; 
+            padding: 10px 20px; background: rgba(255,255,255,0.1); 
+            color: white; border: 1px solid #444; cursor: pointer; 
+            display: none; border-radius: 20px;
+        }
+    </style>
+</head>
+<body>
+
+<button id="back-btn">↑ Up to Parent</button>
+<div id="ui">
+    <div class="label-current" id="active-node-name">System</div>
+    <div class="hint">CLICK A TAG TO DESCEND</div>
+</div>
+
+<script type="importmap">
+    { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "gsap": "https://cdn.jsdelivr.net/npm/gsap@3.12.2/index.js" } }
+</script>
+
+<script type="module">
+    import * as THREE from 'three';
+    import gsap from 'gsap';
+
+    // --- DATA ---
+    const dag = {
+        'root': { label: 'System', children: ['hardware', 'software', 'network'], parent: null },
+        'hardware': { label: 'Hardware', children: ['cpu', 'gpu', 'sensors'], parent: 'root' },
+        'software': { label: 'Software', children: ['os', 'drivers', 'apps'], parent: 'root' },
+        'network': { label: 'Network', children: ['wifi', 'ethernet'], parent: 'root' },
+        'cpu': { label: 'CPU', children: [], parent: 'hardware' },
+        'gpu': { label: 'GPU', children: [], parent: 'hardware' },
+        'sensors': { label: 'Sensors', children: [], parent: 'hardware' },
+        'os': { label: 'OS', children: [], parent: 'software' }
+    };
+
+    let currentId = 'root';
+    const tagMeshes = [];
+
+    // --- SETUP ---
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    const orb = new THREE.Mesh(
+        new THREE.SphereGeometry(1.5, 32, 32),
+        new THREE.MeshBasicMaterial({ color: 0x00f2ff, wireframe: true, transparent: true, opacity: 0.15 })
+    );
+    scene.add(orb);
+    camera.position.z = 8;
+
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    // --- TAG GENERATOR ---
+    function createTag(id, isParent = false) {
+        const data = dag[id];
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 256; canvas.height = 128;
+
+        // Pill shape
+        ctx.fillStyle = isParent ? '#444' : '#00f2ff';
+        ctx.roundRect(10, 30, 236, 60, 30);
+        ctx.fill();
+
+        ctx.font = 'bold 30px Arial';
+        ctx.fillStyle = isParent ? '#888' : '#000';
+        ctx.textAlign = 'center';
+        ctx.fillText(data.label, 128, 70);
+
+        const tex = new THREE.CanvasTexture(canvas);
+        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true }));
+        sprite.userData = { id: id };
+        sprite.scale.set(0,0,0); // Start invisible for animation
+        return sprite;
+    }
+
+    // --- NAVIGATION ENGINE ---
+    function renderLevel(nodeId) {
+        // 1. Clear existing tags
+        tagMeshes.forEach(t => {
+            gsap.to(t.scale, { x: 0, y: 0, z: 0, duration: 0.3, onComplete: () => scene.remove(t) });
+        });
+        tagMeshes.length = 0;
+
+        const node = dag[nodeId];
+        document.getElementById('active-node-name').innerText = node.label;
+        document.getElementById('back-btn').style.display = node.parent ? 'block' : 'none';
+
+        // 2. Spawn Child Tags in an orbit
+        node.children.forEach((childId, i) => {
+            const tag = createTag(childId);
+            const angle = (i / node.children.length) * Math.PI * 2;
+            const radius = 3.5;
+            
+            tag.position.set(Math.cos(angle) * radius, Math.sin(angle) * radius, 0);
+            scene.add(tag);
+            tagMeshes.push(tag);
+
+            gsap.to(tag.scale, { x: 2, y: 1, z: 1, delay: i * 0.1, duration: 0.5, ease: "back.out(1.7)" });
+        });
+
+        // 3. Simple Orb Pulse
+        gsap.fromTo(orb.scale, {x:0.8, y:0.8, z:0.8}, {x:1, y:1, z:1, duration: 0.5});
+    }
+
+    // --- INTERACTION ---
+    window.addEventListener('click', (e) => {
+        mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+        raycaster.setFromCamera(mouse, camera);
+        const intersects = raycaster.intersectObjects(tagMeshes);
+
+        if (intersects.length > 0) {
+            const nextId = intersects[0].object.userData.id;
+            if (dag[nextId].children.length >= 0) {
+                currentId = nextId;
+                renderLevel(currentId);
+            }
+        }
+    });
+
+    document.getElementById('back-btn').onclick = () => {
+        if (dag[currentId].parent) {
+            currentId = dag[currentId].parent;
+            renderLevel(currentId);
+        }
+    };
+
+    // --- LOOP ---
+    function animate() {
+        requestAnimationFrame(animate);
+        orb.rotation.y += 0.005;
+        // Subtle floating effect for tags
+        tagMeshes.forEach((t, i) => {
+            t.position.y += Math.sin(Date.now() * 0.002 + i) * 0.005;
+        });
+        renderer.render(scene, camera);
+    }
+
+    renderLevel('root');
+    animate();
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+</script>
+</body>
+</html>

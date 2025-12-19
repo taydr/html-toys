@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Apple HotSauce (Project X) Interactive Demo</title>
+    <style>
+        body { margin: 0; background: black; overflow: hidden; font-family: 'Geneva', 'Chicago', sans-serif; color: white; }
+        #viewport { perspective: 800px; width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; }
+        #world { position: relative; transform-style: preserve-3d; transition: transform 0.1s ease-out; }
+        
+        .node {
+            position: absolute;
+            padding: 10px 20px;
+            border: 2px solid #555;
+            background: rgba(40, 40, 40, 0.8);
+            transform-origin: center;
+            white-space: nowrap;
+            cursor: pointer;
+            user-select: none;
+            box-shadow: 0 0 15px rgba(0,255,0,0.2);
+        }
+        .node:hover { border-color: #00ff00; background: rgba(0,255,0,0.1); }
+        .folder { border-radius: 15px; border-color: #0088ff; }
+        .folder::after { content: ' ▶'; font-size: 0.8em; }
+
+        #controls { position: fixed; bottom: 20px; left: 20px; background: rgba(0,0,0,0.7); padding: 10px; border: 1px solid #444; z-index: 100; }
+        kbd { background: #333; padding: 2px 5px; border-radius: 3px; border: 1px solid #666; }
+    </style>
+</head>
+<body>
+
+<div id="controls">
+    <b>Apple HotSauce Navigation:</b><br>
+    <kbd>W</kbd> Fly Forward | <kbd>S</kbd> Fly Backward<br>
+    <kbd>A</kbd> / <kbd>D</kbd> Pan Left/Right | <kbd>Mouse</kbd> Click to "Dive"
+</div>
+
+<div id="viewport">
+    <div id="world"></div>
+</div>
+
+<script>
+    const world = document.getElementById('world');
+    let posX = 0, posY = 0, posZ = 0;
+    
+    // Sample MCF-like data structure
+    const data = [
+        { label: "Apple.com", type: "folder", x: 0, y: 0, z: 0 },
+        { label: "Hardware", type: "folder", x: -200, y: -100, z: -500 },
+        { label: "Software", type: "folder", x: 200, y: 100, z: -500 },
+        { label: "Macintosh", type: "page", x: -300, y: -150, z: -1000 },
+        { label: "Newton", type: "page", x: -100, y: -50, z: -1000 },
+        { label: "Mac OS 8", type: "page", x: 100, y: 50, z: -1000 },
+        { label: "QuickTime", type: "page", x: 300, y: 150, z: -1000 },
+        { label: "R.V. Guha's Lab", type: "folder", x: 0, y: 400, z: -1500 },
+        { label: "MCF Whitepaper", type: "page", x: 0, y: 400, z: -2000 }
+    ];
+
+    function init() {
+        data.forEach(item => {
+            const div = document.createElement('div');
+            div.className = `node ${item.type}`;
+            div.textContent = item.label;
+            div.style.transform = `translate3d(${item.x}px, ${item.y}px, ${item.z}px)`;
+            div.onclick = () => diveTo(item.x, item.y, item.z);
+            world.appendChild(div);
+        });
+    }
+
+    function update() {
+        world.style.transform = `translate3d(${-posX}px, ${-posY}px, ${-posZ}px)`;
+    }
+
+    function diveTo(x, y, z) {
+        posX = x; posY = y; posZ = z - 300; // Stop just in front
+        update();
+    }
+
+    window.addEventListener('keydown', (e) => {
+        const speed = 20;
+        if (e.key === 'w') posZ -= speed;
+        if (e.key === 's') posZ += speed;
+        if (e.key === 'a') posX -= speed;
+        if (e.key === 'd') posX += speed;
+        update();
+    });
+
+    init();
+</script>
+</body>
+</html>

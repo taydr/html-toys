@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive 3D RDF Visualizer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/3d-force-graph@1.73.2/dist/3d-force-graph.min.js"></script>
+    <style>
+        body { margin: 0; background: #000; color: white; overflow: hidden; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="flex h-screen w-screen overflow-hidden">
+    <div id="graph-container" class="flex-1 relative bg-[#050505]">
+        <div class="absolute top-4 left-4 z-10 bg-black/60 p-3 border border-white/10 rounded-lg">
+            <h1 class="text-xs font-bold tracking-widest uppercase text-blue-400">3D RDF Explorer</h1>
+        </div>
+    </div>
+
+    <div class="w-80 bg-[#0f0f0f] border-l border-white/10 flex flex-col">
+        <div class="p-4 border-b border-white/10">
+            <h2 class="text-sm font-semibold text-white uppercase tracking-wider">Node Registry</h2>
+        </div>
+        <div id="sidebar-list" class="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
+            </div>
+    </div>
+</div>
+
+<script>
+    // Data Structure
+    const gData = {
+        nodes: [
+            { id: 'User:Admin', type: 'Subject', color: '#60a5fa' },
+            { id: 'has_permission', type: 'Predicate', color: '#fbbf24' },
+            { id: 'Access:Root', type: 'Object', color: '#34d399' },
+            { id: 'created_at', type: 'Predicate', color: '#fbbf24' },
+            { id: '2023-10-01', type: 'Object', color: '#a78bfa' }
+        ],
+        links: [
+            { source: 'User:Admin', target: 'has_permission' },
+            { source: 'has_permission', target: 'Access:Root' },
+            { source: 'User:Admin', target: 'created_at' },
+            { source: 'created_at', target: '2023-10-01' }
+        ]
+    };
+
+    // Wait for the library to be fully loaded
+    window.onload = () => {
+        if (typeof ForceGraph3D === 'undefined') {
+            alert("Failed to load 3D Graph library. Please check your internet connection.");
+            return;
+        }
+
+        const Graph = ForceGraph3D()
+            (document.getElementById('graph-container'))
+            .graphData(gData)
+            .nodeColor(node => node.color)
+            .linkColor(() => '#444')
+            .linkDirectionalArrowLength(3.5)
+            .linkDirectionalArrowRelPos(1)
+            .onNodeClick(node => focusNode(node));
+
+        const sidebar = document.getElementById('sidebar-list');
+        
+        gData.nodes.forEach(node => {
+            const item = document.createElement('div');
+            item.className = 'flex items-center justify-between p-3 rounded cursor-pointer hover:bg-white/5 transition-all group border border-transparent hover:border-white/10';
+            item.innerHTML = `
+                <div class="flex flex-col">
+                    <span class="text-sm font-mono text-gray-300 group-hover:text-white">${node.id}</span>
+                    <span class="text-[10px] text-gray-600 uppercase font-bold">${node.type}</span>
+                </div>
+                <div class="w-2 h-2 rounded-full" style="background-color: ${node.color}"></div>
+            `;
+            item.onclick = () => focusNode(node);
+            sidebar.appendChild(item);
+        });
+
+        function focusNode(node) {
+            // Camera distance from node
+            const distance = 100;
+            const distRatio = 1 + distance/Math.hypot(node.x, node.y, node.z);
+
+            Graph.cameraPosition(
+                { x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio }, 
+                node, 
+                1500
+            );
+        }
+
+        // Handle Resize
+        window.addEventListener('resize', () => {
+            Graph.width(document.getElementById('graph-container').offsetWidth);
+            Graph.height(document.getElementById('graph-container').offsetHeight);
+        });
+    };
+</script>
+
+</body>
+</html>

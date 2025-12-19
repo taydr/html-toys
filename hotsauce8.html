@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>HotSauce / MCF 3D Prototype</title>
+    <style>
+        body { margin: 0; background-color: #000; overflow: hidden; font-family: 'Courier New', Courier, monospace; }
+        #ui { position: absolute; top: 20px; left: 20px; color: #0f0; pointer-events: none; text-shadow: 2px 2px #000; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <h1>Apple HotSauce / MCF</h1>
+        <p>FLY-THROUGH: Move Mouse to Steer | Scroll to Zoom</p>
+    </div>
+
+    <script type="importmap">
+        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        // --- Configuration & Tag Data ---
+        const tags = [
+            "MCF", "Meta Content Framework", "R.V. Guha", "Project X", "Apple ATG",
+            "RDF", "Semantic Web", "Hierarchy", "Nodes", "Arcs", "Sitemap",
+            "Metadata", "Schema", "Triples", "Attributes", "1996", "Spatial UI",
+            "Navigation", "Knowledge Base", "Cyberspace", "Starfield", "Context",
+            "Information Space", "Graph Theory", "Object Oriented", "Hyperlink",
+            "Fly-through", "Bubbles", "Data Visualization", "Experimental"
+        ];
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 5000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // --- Create Floating Text Tags ---
+        function createTextCanvas(text) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = 512;
+            canvas.height = 128;
+            
+            // Retro UI Styling
+            ctx.fillStyle = 'rgba(0, 0, 0, 0)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.font = 'Bold 40pt Arial';
+            ctx.textAlign = 'center';
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 4;
+            ctx.strokeText(text, 256, 80);
+            ctx.fillStyle = '#fff';
+            ctx.fillText(text, 256, 80);
+            
+            return canvas;
+        }
+
+        const tagGroup = new THREE.Group();
+        tags.forEach((text, i) => {
+            const texture = new THREE.CanvasTexture(createTextCanvas(text));
+            const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+            const sprite = new THREE.Sprite(spriteMaterial);
+            
+            // Randomly scatter in 3D space
+            sprite.position.set(
+                (Math.random() - 0.5) * 1500,
+                (Math.random() - 0.5) * 1500,
+                (Math.random() - 0.5) * 2000 - 500
+            );
+            sprite.scale.set(200, 50, 1);
+            tagGroup.add(sprite);
+        });
+        scene.add(tagGroup);
+
+        // --- Interaction State ---
+        let mouseX = 0, mouseY = 0;
+        let targetZ = 500;
+
+        document.addEventListener('mousemove', (e) => {
+            mouseX = (e.clientX - window.innerWidth / 2) * 0.5;
+            mouseY = (e.clientY - window.innerHeight / 2) * 0.5;
+        });
+
+        document.addEventListener('wheel', (e) => {
+            targetZ += e.deltaY * 0.5;
+        });
+
+        // --- Animation Loop ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Smooth camera movement (Classic HotSauce feel)
+            camera.position.x += (mouseX - camera.position.x) * 0.05;
+            camera.position.y += (-mouseY - camera.position.y) * 0.05;
+            camera.position.z += (targetZ - camera.position.z) * 0.05;
+
+            // Make the tags drift slightly
+            tagGroup.children.forEach((s, i) => {
+                s.position.z += Math.sin(Date.now() * 0.001 + i) * 0.2;
+            });
+
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>

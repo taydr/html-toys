@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>MCF Stable Cloud - V3</title>
+    <style>
+        body { margin: 0; background: #000; color: #0f0; font-family: monospace; overflow: hidden; }
+        #ui { position: fixed; top: 10px; left: 10px; z-index: 10; pointer-events: none; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+<div id="ui">MCF_GRAPH_V3: STATUS_OK<br>CLICK TO PIN NODE</div>
+<canvas id="canvas"></canvas>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+let width, height, nodes = [], links = [];
+let selected = null;
+
+const labels = ["Apple", "HotSauce", "MCF", "Guha", "RDF", "XML", "1996", "ProjectX", "Metadata", "Graph", "Logic", "Web3.0", "Semantic", "Context", "Network", "Nodes", "Flow"];
+
+class Node {
+    constructor(label, i) {
+        this.label = label;
+        // Start nodes in a tiny circle at center to prevent "Black Screen" flyaway
+        this.x = window.innerWidth / 2 + Math.cos(i) * 20;
+        this.y = window.innerHeight / 2 + Math.sin(i) * 20;
+        this.vx = 0;
+        this.vy = 0;
+    }
+
+    draw() {
+        ctx.fillStyle = (this === selected) ? "#fff" : "#0f0";
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.font = "12px monospace";
+        ctx.fillText(this.label, this.x + 8, this.y + 4);
+    }
+}
+
+function init() {
+    width = canvas.width = window.innerWidth;
+    height = canvas.height = window.innerHeight;
+    
+    // Create Nodes
+    nodes = labels.map((l, i) => new Node(l, i));
+    
+    // Create Connections
+    nodes.forEach(n => {
+        let target = nodes[Math.floor(Math.random() * nodes.length)];
+        if (target !== n) links.push([n, target]);
+    });
+}
+
+function update() {
+    nodes.forEach(n => {
+        // 1. Friction: Keeps things from accelerating to infinity
+        n.vx *= 0.9;
+        n.vy *= 0.9;
+
+        // 2. Gravity: Pull everything to center
+        n.vx += (width / 2 - n.x) * 0.005;
+        n.vy += (height / 2 - n.y) * 0.005;
+
+        // 3. Repulsion: Keep nodes from overlapping
+        nodes.forEach(n2 => {
+            if (n === n2) return;
+            let dx = n2.x - n.x;
+            let dy = n2.y - n.y;
+            let dist = Math.sqrt(dx*dx + dy*dy) || 1;
+            if (dist < 100) {
+                n.vx -= dx / dist * 0.5;
+                n.vy -= dy / dist * 0.5;
+            }
+        });
+
+        // 4. Spring links
+        links.forEach(l => {
+            let n1 = l[0], n2 = l[1];
+            let dx = n2.x - n1.x;
+            let dy = n2.y - n1.y;
+            let dist = Math.sqrt(dx*dx + dy*dy) || 1;
+            let force = (dist - 150) * 0.002;
+            n1.vx += dx * force;
+            n1.vy += dy * force;
+            n2.vx -= dx * force;
+            n2.vy -= dy * force;
+        });
+
+        // 5. Apply velocity
+        n.x += n.vx;
+        n.y += n.vy;
+
+        // 6. Safety Net: If a node somehow glitches off screen, teleport it back
+        if (isNaN(n.x) || n.x < 0 || n.x > width) n.x = width / 2;
+        if (isNaN(n.y) || n.y < 0 || n.y > height) n.y = height / 2;
+    });
+}
+
+function render() {
+    ctx.fillStyle = "black";
+    ctx.fillRect(0, 0, width, height);
+
+    // Draw Links
+    ctx.strokeStyle = "rgba(0, 255, 0, 0.2)";
+    links.forEach(l => {
+        ctx.beginPath();
+        ctx.moveTo(l[0].x, l[0].y);
+        ctx.lineTo(l[1].x, l[1].y);
+        ctx.stroke();
+    });
+
+    nodes.forEach(n => n.draw());
+    update();
+    requestAnimationFrame(render);
+}
+
+window.addEventListener('mousedown', (e) => {
+    nodes.forEach(n => {
+        let d = Math.sqrt((n.x - e.clientX)**2 + (n.y - e.clientY)**2);
+        if (d < 30) selected = n;
+    });
+});
+
+init();
+render();
+</script>
+</body>
+</html>

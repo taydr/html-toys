@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>3D MCF HotSauce Visualization</title>
+    <style>
+        body { margin: 0; background-color: #000; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        #info { position: absolute; top: 10px; width: 100%; text-align: center; color: #00ff00; pointer-events: none; text-transform: uppercase; letter-spacing: 2px; font-size: 12px; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    <div id="info">Apple HotSauce / MCF Explorer<br>Drag to Rotate • Scroll to Zoom</div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // --- Configuration & Data ---
+        const TAGS = [
+            "Apple", "HotSauce", "MCF", "Metadata", "Project X", "1996", 
+            "Hierarchy", "Sitemap", "Hypertext", "Guha", "RDF", "XML", 
+            "Cyberspace", "Netscape", "Information", "Navigation", "3D Finder", 
+            "Structure", "Interface", "Fly-through", "Bubbles", "Nodes"
+        ];
+
+        let scene, camera, renderer, controls;
+        const tagObjects = [];
+
+        init();
+        animate();
+
+        function init() {
+            // Scene & Camera
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
+            camera.position.z = 400;
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            document.body.appendChild(renderer.domElement);
+
+            // Controls
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.autoRotate = true;
+            controls.autoRotateSpeed = 0.5;
+
+            // Lights
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+
+            // Create the central sphere (invisible or wireframe)
+            const sphereGeom = new THREE.SphereGeometry(150, 16, 16);
+            const sphereMat = new THREE.MeshBasicMaterial({ color: 0x222222, wireframe: true, transparent: true, opacity: 0.1 });
+            const sphere = new THREE.Mesh(sphereGeom, sphereMat);
+            scene.add(sphere);
+
+            // Create Tags
+            TAGS.forEach((text, i) => {
+                const label = createTextLabel(text);
+                
+                // Distribute tags around the sphere using Fibonacci mapping for even spacing
+                const phi = Math.acos(-1 + (2 * i) / TAGS.length);
+                const theta = Math.sqrt(TAGS.length * Math.PI) * phi;
+                const radius = 200;
+
+                label.position.set(
+                    radius * Math.cos(theta) * Math.sin(phi),
+                    radius * Math.sin(theta) * Math.sin(phi),
+                    radius * Math.cos(phi)
+                );
+
+                scene.add(label);
+                tagObjects.push(label);
+            });
+
+            window.addEventListener('resize', onWindowResize, false);
+        }
+
+        function createTextLabel(text) {
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.width = 512;
+            canvas.height = 128;
+
+            // Draw a background box like HotSauce
+            context.fillStyle = 'rgba(0, 255, 0, 0.2)'; // Faint green glow
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw text
+            context.font = 'Bold 60px monospace';
+            context.textAlign = 'center';
+            context.textBaseline = 'middle';
+            
+            // Neon Green stroke and white fill
+            context.strokeStyle = '#00ff00';
+            context.lineWidth = 4;
+            context.strokeText(text, 256, 64);
+            context.fillStyle = '#ffffff';
+            context.fillText(text, 256, 64);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            const material = new THREE.SpriteMaterial({ map: texture });
+            const sprite = new THREE.Sprite(material);
+            
+            // Scale sprite based on aspect ratio
+            sprite.scale.set(100, 25, 1);
+            return sprite;
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+
+            // Make labels pulsate slightly for that "living" 90s feel
+            const time = Date.now() * 0.002;
+            tagObjects.forEach((obj, i) => {
+                const scaleBase = 1 + Math.sin(time + i) * 0.05;
+                obj.scale.set(100 * scaleBase, 25 * scaleBase, 1);
+            });
+
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>

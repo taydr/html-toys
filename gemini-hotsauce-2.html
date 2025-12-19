@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>HotSauce MCF - Nested Hierarchy</title>
+    <style>
+        body { margin: 0; background-color: #050505; overflow: hidden; font-family: monospace; }
+        #ui { position: absolute; bottom: 20px; left: 20px; color: #0f0; background: rgba(0,20,0,0.8); padding: 10px; border: 1px solid #0f0; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    <div id="ui"><b>MCF HIERARCHY MODE</b><br>Core > Categories > Sub-Tags</div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // --- Hierarchical Data Structure ---
+        const DATA_TREE = {
+            name: "ROOT",
+            children: [
+                { name: "NAVIGATION", children: ["Sitemap", "History", "Bookmarks", "Search"] },
+                { name: "MEDIA", children: ["Images", "Video", "Audio", "Streams"] },
+                { name: "SYSTEM", children: ["Kernel", "Drivers", "Memory", "I/O"] },
+                { name: "PROJECT_X", children: ["MCF_Spec", "Guha_Notes", "RDF_Draft"] }
+            ]
+        };
+
+        let scene, camera, renderer, controls;
+        const groupNodes = [];
+
+        init();
+        animate();
+
+        function init() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 5000);
+            camera.position.set(0, 200, 600);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+
+            // 1. Create the ROOT center
+            const rootLabel = createTextLabel("MCF CORE", "#ffffff", 1.5);
+            scene.add(rootLabel);
+
+            // 2. Create Parent Nodes (Orbiting the Core)
+            DATA_TREE.children.forEach((category, i) => {
+                const angle = (i / DATA_TREE.children.length) * Math.PI * 2;
+                const radius = 300;
+
+                // Create a Group to hold the Category and its Children
+                const categoryGroup = new THREE.Group();
+                categoryGroup.position.set(Math.cos(angle) * radius, 0, Math.sin(angle) * radius);
+                scene.add(categoryGroup);
+                
+                // Add the Category Label
+                const catLabel = createTextLabel(category.name, "#00ff00", 1.2);
+                categoryGroup.add(catLabel);
+
+                // 3. Create Child Nodes (Orbiting the Category)
+                category.children.forEach((childName, j) => {
+                    const childAngle = (j / category.children.length) * Math.PI * 2;
+                    const childRadius = 100;
+
+                    const childLabel = createTextLabel(childName, "#00aaaa", 0.8);
+                    childLabel.position.set(
+                        Math.cos(childAngle) * childRadius,
+                        Math.sin(childAngle) * childRadius, // Vertical orbit
+                        0
+                    );
+                    categoryGroup.add(childLabel);
+                });
+
+                groupNodes.push({ group: categoryGroup, speed: 0.005 + (i * 0.002) });
+            });
+
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function createTextLabel(text, color, scaleMult) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = 256; canvas.height = 64;
+            
+            ctx.fillStyle = 'rgba(0, 40, 0, 0.6)';
+            ctx.fillRect(0, 0, 256, 64);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.strokeRect(2, 2, 252, 60);
+            
+            ctx.font = 'bold 32px monospace';
+            ctx.fillStyle = color;
+            ctx.textAlign = 'center';
+            ctx.fillText(text, 128, 42);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+            const sprite = new THREE.Sprite(spriteMaterial);
+            sprite.scale.set(100 * scaleMult, 25 * scaleMult, 1);
+            return sprite;
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Rotate the entire hierarchy groups
+            const time = Date.now() * 0.001;
+            groupNodes.forEach((node, i) => {
+                // Orbit parent around center
+                const radius = 350;
+                const angle = (time * 0.2) + (i * (Math.PI * 2 / groupNodes.length));
+                node.group.position.x = Math.cos(angle) * radius;
+                node.group.position.z = Math.sin(angle) * radius;
+
+                // Subtle local rotation for children
+                node.group.children.forEach((child, idx) => {
+                    if(idx > 0) { // Skip the parent label
+                        child.position.y += Math.sin(time + idx) * 0.1;
+                    }
+                });
+            });
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>

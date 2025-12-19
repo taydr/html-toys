@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>HotSauce / MCF Playground</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body { margin: 0; display: flex; height: 100vh; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica; background: #000; color: #fff; overflow: hidden; }
+        #canvas-container { flex: 2; position: relative; border-right: 1px solid #444; }
+        #sidebar { flex: 1; background: #1a1a1a; padding: 20px; overflow-y: auto; }
+        
+        /* Hierarchy Styles */
+        .tree-node { margin-left: 15px; border-left: 1px solid #333; padding-left: 10px; cursor: pointer; transition: 0.2s; }
+        .node-label { padding: 4px 8px; border-radius: 4px; display: inline-block; }
+        .node-label:hover { background: #333; }
+        .active { background: #007aff !important; color: white; font-weight: bold; }
+        
+        h2 { font-size: 14px; text-transform: uppercase; color: #888; margin-bottom: 20px; }
+        #tooltip { position: absolute; background: rgba(0,0,0,0.8); padding: 5px 10px; border-radius: 4px; pointer-events: none; display: none; }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container">
+        <div id="tooltip"></div>
+    </div>
+    
+    <div id="sidebar">
+        <h2>MCF Data Hierarchy</h2>
+        <div id="hierarchy-root"></div>
+    </div>
+
+<script>
+/**
+ * MCF-inspired Sample Data
+ * HotSauce visualized websites and filesystems.
+ */
+const mcfData = {
+    id: "root",
+    label: "Internet/World",
+    color: 0x00ff00, // Top level green in original HotSauce
+    children: [
+        {
+            id: "search",
+            label: "Search Engines",
+            color: 0x007aff,
+            children: [
+                { id: "google", label: "Google", color: 0xeeeeee },
+                { id: "yahoo", label: "Yahoo! (Original MCF User)", color: 0x800080 },
+                { id: "altavista", label: "AltaVista", color: 0x00ffff }
+            ]
+        },
+        {
+            id: "apple",
+            label: "Apple Computer",
+            color: 0xff3b30,
+            children: [
+                { id: "hotsauce", label: "HotSauce Project", color: 0xffcc00 },
+                { id: "mcf_spec", label: "MCF Whitepaper", color: 0xffcc00 },
+                { id: "atg", label: "Advanced Technology Group", color: 0xffcc00 }
+            ]
+        },
+        {
+            id: "social",
+            label: "Social Networks",
+            color: 0x4cd964,
+            children: [
+                { id: "reddit", label: "Reddit", color: 0xff4500 },
+                { id: "github", label: "GitHub", color: 0xffffff }
+            ]
+        }
+    ]
+};
+
+// --- Three.js Implementation ---
+let scene, camera, renderer, raycaster, mouse;
+let nodeMeshes = [];
+let targetCameraPos = new THREE.Vector3(0, 0, 500);
+
+function init3D() {
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(75, (window.innerWidth * 0.66) / window.innerHeight, 1, 10000);
+    camera.position.z = 500;
+
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth * 0.66, window.innerHeight);
+    document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+    raycaster = new THREE.Raycaster();
+    mouse = new THREE.Vector2();
+
+    // Create objects from MCF hierarchy
+    create3DNodes(mcfData, 0, 0, 0);
+
+    window.addEventListener('click', onCanvasClick);
+    window.addEventListener('mousemove', onMouseMove);
+    animate();
+}
+
+function create3DNodes(node, x, y, z, level = 0) {
+    // Creating a text-labeled sprite or plane for the "bubble" effect
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = 256; canvas.height = 64;
+    ctx.fillStyle = '#' + node.color.toString(16).padStart(6, '0');
+    ctx.font = 'Bold 30px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(node.label, 128, 40);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+    const sprite = new THREE.Sprite(material);
+    
+    sprite.scale.set(150, 40, 1);
+    sprite.position.set(x, y, z);
+    sprite.userData = { id: node.id, label: node.label };
+    
+    scene.add(sprite);
+    nodeMeshes.push(sprite);
+
+    if (node.children) {
+        node.children.forEach((child, i) => {
+            const angle = (i / node.children.length) * Math.PI * 2;
+            const radius = 300 / (level + 1);
+            // Move deeper in Z for children, like HotSauce fly-through
+            create3DNodes(child, 
+                x + Math.cos(angle) * radius, 
+                y + Math.sin(angle) * radius, 
+                z - 400, 
+                level + 1
+            );
+        });
+    }
+}
+
+function focusNode(id) {
+    const mesh = nodeMeshes.find(m => m.userData.id === id);
+    if (mesh) {
+        // Position camera in front of the node
+        targetCameraPos.set(mesh.position.x, mesh.position.y, mesh.position.z + 200);
+        
+        // Update UI
+        document.querySelectorAll('.node-label').forEach(el => el.classList.remove('active'));
+        const labelEl = document.getElementById('label-' + id);
+        if (labelEl) {
+            labelEl.classList.add('active');
+            labelEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    }
+}
+
+function onCanvasClick(event) {
+    mouse.x = (event.clientX / (window.innerWidth * 0.66)) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObjects(nodeMeshes);
+
+    if (intersects.length > 0) {
+        focusNode(intersects[0].object.userData.id);
+    }
+}
+
+function onMouseMove(event) {
+    const tooltip = document.getElementById('tooltip');
+    mouse.x = (event.clientX / (window.innerWidth * 0.66)) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObjects(nodeMeshes);
+    
+    if (intersects.length > 0) {
+        tooltip.style.display = 'block';
+        tooltip.style.left = event.clientX + 10 + 'px';
+        tooltip.style.top = event.clientY + 10 + 'px';
+        tooltip.innerText = intersects[0].object.userData.label;
+    } else {
+        tooltip.style.display = 'none';
+    }
+}
+
+function animate() {
+    requestAnimationFrame(animate);
+    // Smooth camera "flying"
+    camera.position.lerp(targetCameraPos, 0.05);
+    renderer.render(scene, camera);
+}
+
+// --- Hierarchy UI implementation ---
+function renderHierarchy(node, container) {
+    const div = document.createElement('div');
+    div.className = 'tree-node';
+    
+    const label = document.createElement('span');
+    label.className = 'node-label';
+    label.id = 'label-' + node.id;
+    label.innerText = node.label;
+    label.onclick = (e) => {
+        e.stopPropagation();
+        focusNode(node.id);
+    };
+    
+    div.appendChild(label);
+    container.appendChild(div);
+
+    if (node.children) {
+        node.children.forEach(child => renderHierarchy(child, div));
+    }
+}
+
+// Start
+init3D();
+renderHierarchy(mcfData, document.getElementById('hierarchy-root'));
+focusNode("root");
+
+</script>
+</body>
+</html>

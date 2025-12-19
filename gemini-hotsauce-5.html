@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>HotSauce MCF - Fixed & Linked</title>
+    <style>
+        body { margin: 0; background-color: #000; overflow: hidden; font-family: 'Courier New', Courier, monospace; }
+        #overlay { position: absolute; top: 20px; left: 20px; color: #0f0; pointer-events: none; text-shadow: 0 0 5px #0f0; }
+        #search-container { position: absolute; top: 20px; right: 20px; background: rgba(0, 40, 0, 0.8); padding: 10px; border: 1px solid #0f0; }
+        input { background: #000; border: 1px solid #0f0; color: #0f0; padding: 5px; outline: none; font-family: monospace; }
+        #hint { position: absolute; bottom: 20px; width: 100%; text-align: center; color: #005500; font-size: 12px; pointer-events: none; }
+        canvas { display: block; cursor: crosshair; }
+    </style>
+</head>
+<body>
+    <div id="overlay">
+        <h2 style="margin:0">MCF NAVIGATOR</h2>
+        <div id="status">Target: MCF_CORE</div>
+    </div>
+    <div id="search-container"><input type="text" id="searchBar" placeholder="SEARCH TAGS..."></div>
+    <div id="hint">CLICK TAGS • ENTER TO SEARCH • [SPACE] TO RESET</div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+                "@tweenjs/tween.js": "https://unpkg.com/@tweenjs/tween.js@23.1.1/dist/tween.esm.js"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import TWEEN from '@tweenjs/tween.js';
+
+        // --- Data Structure ---
+        const DATA_TREE = {
+            name: "MCF_CORE",
+            children: [
+                { name: "DOCUMENTS", children: ["Resume.mcf", "Budget.mcf", "Drafts", "Archive"] },
+                { name: "SYSTEM", children: ["Finder 3D", "HotSauce", "Kernel", "Shell"] },
+                { name: "NETWORK", children: ["Cloud", "IP_Nodes", "Sockets", "FTP"] }
+            ]
+        };
+
+        let scene, camera, renderer, controls, raycaster, mouse;
+        const clickableObjects = [];
+
+        init();
+        animate();
+
+        function init() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 5000);
+            camera.position.set(0, 500, 1000);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+
+            // Setup Line Material
+            const lineMat = new THREE.LineBasicMaterial({ color: 0x004400 });
+
+            // 1. Create Root
+            const rootLabel = createTextLabel(DATA_TREE.name, "#ffffff", 2);
+            rootLabel.userData = { name: DATA_TREE.name };
+            scene.add(rootLabel);
+            clickableObjects.push(rootLabel);
+
+            // 2. Build Tree
+            DATA_TREE.children.forEach((cat, i) => {
+                const angle = (i / DATA_TREE.children.length) * Math.PI * 2;
+                const dist = 500;
+                
+                const group = new THREE.Group();
+                group.position.set(Math.cos(angle) * dist, 100, Math.sin(angle) * dist);
+                scene.add(group);
+
+                // Add Category Label
+                const catLabel = createTextLabel(cat.name, "#00ff00", 1.5);
+                catLabel.userData = { name: cat.name };
+                group.add(catLabel);
+                clickableObjects.push(catLabel);
+
+                // Draw line from Root to Category
+                const points = [new THREE.Vector3(0,0,0), group.position];
+                const lineGeom = new THREE.BufferGeometry().setFromPoints(points);
+                scene.add(new THREE.Line(lineGeom, lineMat));
+
+                cat.children.forEach((child, j) => {
+                    const cAngle = (j / cat.children.length) * Math.PI * 2;
+                    const childLabel = createTextLabel(child, "#00aaaa", 0.9);
+                    const cPos = new THREE.Vector3(Math.cos(cAngle) * 180, Math.sin(cAngle) * 180, 0);
+                    childLabel.position.copy(cPos);
+                    childLabel.userData = { name: child };
+                    group.add(childLabel);
+                    clickableObjects.push(childLabel);
+
+                    // Line from Category to Child
+                    const cPoints = [new THREE.Vector3(0,0,0), cPos];
+                    const cLineGeom = new THREE.BufferGeometry().setFromPoints(cPoints);
+                    group.add(new THREE.Line(cLineGeom, lineMat));
+                });
+            });
+
+            // UI Listeners
+            window.addEventListener('click', onDocumentClick);
+            window.addEventListener('keydown', (e) => { if(e.code === 'Space') resetCamera(); });
+            document.getElementById('searchBar').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    const match = clickableObjects.find(o => o.userData.name.toLowerCase() === e.target.value.toLowerCase());
+                    if (match) {
+                        const wp = new THREE.Vector3();
+                        match.getWorldPosition(wp);
+                        diveTo(wp, match.userData.name);
+                    }
+                }
+            });
+        }
+
+        function createTextLabel(text, color, scale) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = 256; canvas.height = 64;
+            ctx.fillStyle = 'black'; ctx.fillRect(0,0,256,64);
+            ctx.strokeStyle = color; ctx.lineWidth = 4; ctx.strokeRect(0,0,256,64);
+            ctx.font = 'bold 28px monospace'; ctx.fillStyle = color; ctx.textAlign = 'center';
+            ctx.fillText(text, 128, 42);
+            const tex = new THREE.CanvasTexture(canvas);
+            const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex }));
+            sprite.scale.set(100 * scale, 25 * scale, 1);
+            return sprite;
+        }
+
+        function onDocumentClick(event) {
+            if (event.target.tagName === 'INPUT') return;
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            const hits = raycaster.intersectObjects(clickableObjects);
+            if (hits.length > 0) {
+                const wp = new THREE.Vector3();
+                hits[0].object.getWorldPosition(wp);
+                diveTo(wp, hits[0].object.userData.name);
+            }
+        }
+
+        function diveTo(pos, name) {
+            document.getElementById('status').innerText = "Target: " + name;
+            const offset = new THREE.Vector3().subVectors(camera.position, pos).normalize().multiplyScalar(250);
+            new TWEEN.Tween(camera.position).to({ x: pos.x + offset.x, y: pos.y + offset.y, z: pos.z + offset.z }, 1000).easing(TWEEN.Easing.Quadratic.Out).start();
+            new TWEEN.Tween(controls.target).to({ x: pos.x, y: pos.y, z: pos.z }, 1000).easing(TWEEN.Easing.Quadratic.Out).start();
+        }
+
+        function resetCamera() { diveTo(new THREE.Vector3(0,0,0), "MCF_CORE"); }
+
+        function animate(time) {
+            requestAnimationFrame(animate);
+            TWEEN.update(time);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>

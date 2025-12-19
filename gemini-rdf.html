@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RDF Interactive Explorer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/standalone/umd/vis-network.min.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; background: #f4f7f6; }
+        header { background: #2c3e50; color: white; padding: 1rem 2rem; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        main { display: flex; flex: 1; overflow: hidden; }
+        #editor-container { width: 40%; display: flex; flex-direction: column; border-right: 2px solid #ddd; background: #fff; }
+        textarea { flex: 1; padding: 15px; font-family: 'Courier New', Courier, monospace; font-size: 14px; border: none; resize: none; outline: none; line-height: 1.5; }
+        #graph-container { width: 60%; background: #ffffff; position: relative; }
+        .label { padding: 10px; background: #ecf0f1; font-weight: bold; border-bottom: 1px solid #ddd; color: #34495e; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; }
+        #network { height: 100%; width: 100%; }
+        .hint { font-size: 12px; color: #7f8c8d; padding: 10px; background: #f9f9f9; border-top: 1px solid #eee; }
+    </style>
+</head>
+<body>
+
+<header>
+    <h2 style="margin:0;">RDF Graph Explorer</h2>
+    <p style="margin:5px 0 0 0; font-size: 0.9rem; opacity: 0.8;">Understand the "Subject → Predicate → Object" relationship</p>
+</header>
+
+<main>
+    <div id="editor-container">
+        <div class="label">Input (Turtle-style Syntax)</div>
+        <textarea id="rdf-input" spellcheck="false">
+# Edit this to update the graph!
+# Format: Subject | Predicate | Object
+
+Gemini | is_a | AI_Model
+Gemini | created_by | Google
+Google | located_in | California
+California | has_capital | Sacramento
+Gemini | features | Multimodality
+Multimodality | enables | Image_Generation
+        </textarea>
+        <div class="hint">
+            <strong>How to use:</strong> Use the format <code>Subject | Relationship | Object</code>. <br> Each new line creates a new link in the Knowledge Graph.
+        </div>
+    </div>
+
+    <div id="graph-container">
+        <div class="label">Visualized RDF Knowledge Graph</div>
+        <div id="network"></div>
+    </div>
+</main>
+
+<script>
+    const input = document.getElementById('rdf-input');
+    const container = document.getElementById('network');
+    let network = null;
+
+    function updateGraph() {
+        const text = input.value;
+        const lines = text.split('\n');
+        
+        const nodesMap = new Map();
+        const edges = [];
+
+        lines.forEach((line) => {
+            if (line.trim().startsWith('#') || !line.includes('|')) return;
+            
+            const parts = line.split('|').map(p => p.trim());
+            if (parts.length >= 3) {
+                const [s, p, o] = parts;
+
+                // Add nodes
+                if (!nodesMap.has(s)) nodesMap.set(s, { id: s, label: s, color: '#3498db', font: { color: 'white' } });
+                if (!nodesMap.has(o)) nodesMap.set(o, { id: o, label: o, color: '#9b59b6', font: { color: 'white' } });
+
+                // Add edge
+                edges.push({
+                    from: s,
+                    to: o,
+                    label: p,
+                    arrows: 'to',
+                    font: { align: 'top', size: 12, color: '#2c3e50' },
+                    color: { color: '#bdc3c7', highlight: '#2c3e50' }
+                });
+            }
+        });
+
+        const data = {
+            nodes: Array.from(nodesMap.values()),
+            edges: edges
+        };
+
+        const options = {
+            physics: {
+                enabled: true,
+                barnesHut: { gravitationalConstant: -2000, centralGravity: 0.3, springLength: 150 }
+            },
+            nodes: { shape: 'box', margin: 10, borderRadius: 4 },
+            edges: { width: 2 }
+        };
+
+        if (network) {
+            network.setData(data);
+        } else {
+            network = new vis.Network(container, data, options);
+        }
+    }
+
+    input.addEventListener('input', updateGraph);
+    window.onload = updateGraph;
+</script>
+
+</body>
+</html>

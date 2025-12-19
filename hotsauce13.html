@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fixed-Center MCF Navigator</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #050508; font-family: sans-serif; }
+        canvas { display: block; }
+        #hud {
+            position: absolute;
+            top: 20px;
+            width: 100%;
+            text-align: center;
+            color: #00f2ff;
+            pointer-events: none;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        #back-btn {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            padding: 10px 20px;
+            background: rgba(0, 242, 255, 0.1);
+            color: #00f2ff;
+            border: 1px solid #00f2ff;
+            cursor: pointer;
+            border-radius: 4px;
+            display: none;
+            transition: background 0.2s;
+        }
+        #back-btn:hover { background: rgba(0, 242, 255, 0.3); }
+    </style>
+</head>
+<body>
+
+<button id="back-btn">← PARENT NODE</button>
+<div id="hud"><h2 id="current-label">Root Node</h2></div>
+
+<script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+            "gsap": "https://cdn.jsdelivr.net/npm/gsap@3.12.2/index.js"
+        }
+    }
+</script>
+
+<script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import gsap from 'gsap';
+
+    // --- DATA STRUCTURE ---
+    const dagData = {
+        'root': { name: 'Root System', color: '#ffffff', children: ['hardware', 'software', 'network'], parent: null },
+        'hardware': { name: 'Hardware', color: '#ff3366', children: ['cpu', 'gpu', 'storage'], parent: 'root' },
+        'software': { name: 'Software', color: '#33ff99', children: ['os', 'apps', 'drivers'], parent: 'root' },
+        'network': { name: 'Network', color: '#3399ff', children: ['wifi', 'lan'], parent: 'root' },
+        'cpu': { name: 'Processors', color: '#ffcc00', children: [], parent: 'hardware' },
+        'gpu': { name: 'Graphics', color: '#ffcc00', children: [], parent: 'hardware' },
+        'storage': { name: 'Drives', color: '#ffcc00', children: [], parent: 'hardware' },
+        'os': { name: 'Kernel', color: '#9933ff', children: [], parent: 'software' },
+        'apps': { name: 'Userspace', color: '#9933ff', children: [], parent: 'software' }
+    };
+
+    let currentNodeId = 'root';
+    let tagObjects = [];
+
+    // --- SCENE SETUP ---
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    camera.position.z = 8;
+
+    // --- CENTRAL ORB ---
+    const orbMat = new THREE.MeshStandardMaterial({ color: 0x00f2ff, wireframe: true, transparent: true, opacity: 0.2 });
+    const sphere = new THREE.Mesh(new THREE.SphereGeometry(2, 32, 32), orbMat);
+    scene.add(sphere);
+    scene.add(new THREE.AmbientLight(0xffffff, 1));
+
+    // --- INTERACTION UTILS ---
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    function createTagPill(id) {
+        const data = dagData[id];
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 512; canvas.height = 256;
+
+        ctx.fillStyle = data.color;
+        ctx.roundRect(50, 80, 412, 100, 50);
+        ctx.fill();
+        ctx.font = 'bold 44px sans-serif';
+        ctx.fillStyle = 'black';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(data.name, 256, 130);
+
+        const texture = new THREE.CanvasTexture(canvas);
+        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true }));
+        sprite.userData = { id: id };
+        sprite.scale.set(0, 0, 0); // Start small for intro animation
+        return sprite;
+    }
+
+    // --- NAVIGATION LOGIC ---
+    function navigateTo(id) {
+        // 1. Clear old tags with animation
+        tagObjects.forEach(obj => {
+            gsap.to(obj.scale, { x: 0, y: 0, z: 0, duration: 0.3, onComplete: () => scene.remove(obj) });
+        });
+        tagObjects = [];
+
+        currentNodeId = id;
+        const node = dagData[id];
+        
+        // Update UI
+        document.getElementById('current-label').innerText = node.name;
+        document.getElementById('back-btn').style.display = node.parent ? 'block' : 'none';
+
+        // 2. Pulse the sphere to indicate transition
+        gsap.fromTo(orbMat, { opacity: 0.8 }, { opacity: 0.2, duration: 0.8 });
+
+        // 3. Create new children tags
+        const children = node.children;
+        children.forEach((childId, i) => {
+            const sprite = createTagPill(childId);
+            
+            // Distribute on a horizontal ring or a sphere
+            const phi = Math.acos(-1 + (2 * i) / children.length);
+            const theta = Math.sqrt(children.length * Math.PI) * phi;
+            
+            sprite.position.setFromSphericalCoords(4.5, phi, theta);
+            scene.add(sprite);
+            tagObjects.push(sprite);
+
+            // Intro animation
+            gsap.to(sprite.scale, { x: 2.2, y: 1.1, z: 1, duration: 0.5, delay: i * 0.1, ease: "back.out(1.7)" });
+        });
+    }
+
+    // --- EVENT LISTENERS ---
+    window.addEventListener('click', (event) => {
+        mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+        raycaster.setFromCamera(mouse, camera);
+
+        const intersects = raycaster.intersectObjects(tagObjects);
+        if (intersects.length > 0) {
+            const clickedId = intersects[0].object.userData.id;
+            if (dagData[clickedId].children.length > 0) {
+                navigateTo(clickedId);
+            } else {
+                // Flash red if no children (leaf node)
+                gsap.to(intersects[0].object.material.color, { r: 5, g: 0, b: 0, duration: 0.1, yoyo: true, repeat: 1 });
+            }
+        }
+    });
+
+    document.getElementById('back-btn').addEventListener('click', () => {
+        const parentId = dagData[currentNodeId].parent;
+        if (parentId) navigateTo(parentId);
+    });
+
+    function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        sphere.rotation.y += 0.005;
+        renderer.render(scene, camera);
+    }
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    navigateTo('root');
+    animate();
+</script>
+</body>
+</html>

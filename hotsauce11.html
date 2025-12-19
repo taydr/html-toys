@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>MCF HotSauce Navigator</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: radial-gradient(circle, #1a1a2e 0%, #050505 100%); font-family: 'Segoe UI', sans-serif; }
+        #ui-layer { position: absolute; top: 20px; left: 20px; z-index: 10; display: flex; flex-direction: column; gap: 10px; }
+        .nav-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 10px 20px;
+            cursor: pointer;
+            border-radius: 4px;
+            backdrop-filter: blur(5px);
+            transition: all 0.3s;
+            text-align: left;
+            min-width: 150px;
+        }
+        .nav-btn:hover { background: rgba(255, 255, 255, 0.2); transform: translateX(5px); }
+        .nav-btn.active { border-left: 4px solid #00f2ff; background: rgba(0, 242, 255, 0.1); }
+        #breadcrumb { position: absolute; bottom: 20px; left: 20px; color: #00f2ff; font-size: 14px; letter-spacing: 1px; }
+    </style>
+</head>
+<body>
+
+<div id="ui-layer"></div>
+<div id="breadcrumb">ROOT NODE</div>
+
+<script type="importmap">
+    { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "gsap": "https://cdn.jsdelivr.net/npm/gsap@3.12.2/index.js" } }
+</script>
+
+<script type="module">
+    import * as THREE from 'three';
+    import gsap from 'gsap';
+
+    // --- DATA STRUCTURE (DAG) ---
+    const dagData = {
+        'root': { label: 'System', color: '#ffffff', children: ['hardware', 'software', 'network'], pos: [0,0,0] },
+        'hardware': { label: 'Hardware', color: '#ff4d4d', children: ['cpu', 'gpu', 'storage'], pos: [5, 2, -3] },
+        'software': { label: 'Software', color: '#4dff88', children: ['os', 'apps', 'drivers'], pos: [-5, 3, -2] },
+        'network': { label: 'Network', color: '#4d94ff', children: ['protocols', 'topology'], pos: [0, -4, -5] },
+        'cpu': { label: 'Processor', color: '#ff8080', children: [], pos: [8, 4, -1] },
+        'gpu': { label: 'Graphics', color: '#ff8080', children: [], pos: [10, 1, -4] },
+        'os': { label: 'Operating System', color: '#80ffaa', children: [], pos: [-8, 6, 0] }
+    };
+
+    // --- SCENE SETUP ---
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+    scene.add(ambientLight);
+
+    // --- CORE COMPONENTS ---
+    const orbGroup = new THREE.Group();
+    scene.add(orbGroup);
+
+    // The Focus Sphere
+    const orbGeom = new THREE.SphereGeometry(1.5, 32, 32);
+    const orbMat = new THREE.MeshPhongMaterial({ color: 0x00f2ff, wireframe: true, transparent: true, opacity: 0.2 });
+    const focusOrb = new THREE.Mesh(orbGeom, orbMat);
+    orbGroup.add(focusOrb);
+
+    const tagSprites = {};
+    const uiContainer = document.getElementById('ui-layer');
+
+    // Create Tag Sprites
+    Object.keys(dagData).forEach(id => {
+        const data = dagData[id];
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 256; canvas.height = 128;
+
+        ctx.fillStyle = data.color;
+        ctx.roundRect(10, 30, 236, 60, 30);
+        ctx.fill();
+        ctx.font = 'bold 28px sans-serif';
+        ctx.fillStyle = '#000';
+        ctx.textAlign = 'center';
+        ctx.fillText(data.label, 128, 70);
+
+        const texture = new THREE.CanvasTexture(canvas);
+        const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+        const sprite = new THREE.Sprite(material);
+        sprite.scale.set(2, 1, 1);
+        
+        // Initial positioning
+        sprite.position.set(...data.pos);
+        scene.add(sprite);
+        tagSprites[id] = sprite;
+    });
+
+    // --- NAVIGATION LOGIC ---
+    function navigateTo(nodeId) {
+        const node = dagData[nodeId];
+        const targetPos = new THREE.Vector3(...node.pos);
+
+        // 1. Move the Focus Sphere to the new node
+        gsap.to(orbGroup.position, { x: targetPos.x, y: targetPos.y, z: targetPos.z, duration: 1.2, ease: "power2.inOut" });
+
+        // 2. Fly the camera to "look at" the node from a comfortable distance
+        gsap.to(camera.position, { 
+            x: targetPos.x, y: targetPos.y, z: targetPos.z + 7, 
+            duration: 1.5, ease: "power3.inOut" 
+        });
+
+        // 3. Highlight children and dim others
+        Object.keys(tagSprites).forEach(id => {
+            const isChild = node.children.includes(id) || id === nodeId;
+            gsap.to(tagSprites[id].material, { opacity: isChild ? 1 : 0.2, duration: 0.5 });
+            
+            // If it's a child, bring it closer to the focus sphere
+            if (node.children.includes(id)) {
+                // Logic to "pull" children into a local orbit could go here
+            }
+        });
+
+        // Update UI
+        document.getElementById('breadcrumb').innerText = `CURRENT SCOPE: ${node.label.toUpperCase()}`;
+        updateButtons(nodeId);
+    }
+
+    function updateButtons(currentId) {
+        uiContainer.innerHTML = '';
+        // Add "Back to Root" if not at root
+        if (currentId !== 'root') {
+            createBtn('root', '⬅ Back to Root');
+        }
+        // Add buttons for children
+        dagData[currentId].children.forEach(childId => {
+            createBtn(childId, `Explore ${dagData[childId].label} ⮕`);
+        });
+    }
+
+    function createBtn(id, label) {
+        const btn = document.createElement('button');
+        btn.className = 'nav-btn';
+        btn.innerText = label;
+        btn.onclick = () => navigateTo(id);
+        uiContainer.appendChild(btn);
+    }
+
+    // --- RENDER LOOP ---
+    function animate() {
+        requestAnimationFrame(animate);
+        focusOrb.rotation.y += 0.01;
+        renderer.render(scene, camera);
+    }
+
+    // Initial State
+    camera.position.z = 10;
+    navigateTo('root');
+    animate();
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+</script>
+</body>
+</html>

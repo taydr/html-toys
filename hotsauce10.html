@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Tag Navigator (MCF Style)</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #0a0a0a; font-family: sans-serif; }
+        canvas { display: block; }
+        #instructions {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: rgba(255,255,255,0.5);
+            pointer-events: none;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="instructions">DRAG TO ROTATE • SCROLL TO ZOOM</div>
+
+<script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+            "lil-gui": "https://cdn.jsdelivr.net/npm/lil-gui@0.19/+esm"
+        }
+    }
+</script>
+
+<script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import GUI from 'lil-gui';
+
+    // --- SCENE SETUP ---
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    document.body.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    camera.position.z = 6;
+
+    // --- CENTRAL ORB ---
+    const orbGeom = new THREE.SphereGeometry(2, 64, 64);
+    const orbMat = new THREE.MeshStandardMaterial({ 
+        color: 0x444444, 
+        wireframe: true,
+        transparent: true,
+        opacity: 0.2
+    });
+    const sphere = new THREE.Mesh(orbGeom, orbMat);
+    scene.add(sphere);
+
+    // --- DATA & TAGS ---
+    const tagData = [
+        { name: 'Root Node', color: '#ffffff' },
+        { name: 'Metadata', color: '#ff3366' },
+        { name: 'Hierarchy', color: '#33ff99' },
+        { name: 'Attributes', color: '#3399ff' },
+        { name: 'Relations', color: '#ffcc00' },
+        { name: 'Context', color: '#9933ff' },
+        { name: 'Schema', color: '#00ffff' }
+    ];
+
+    const tagObjects = [];
+
+    function createTagPill(text, color) {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 512;
+        canvas.height = 256;
+
+        ctx.fillStyle = color;
+        ctx.roundRect(50, 80, 412, 100, 50);
+        ctx.fill();
+
+        ctx.font = 'bold 44px sans-serif';
+        ctx.fillStyle = 'black'; // Dark text for high contrast on bright pills
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, 256, 130);
+
+        const texture = new THREE.CanvasTexture(canvas);
+        const material = new THREE.SpriteMaterial({ map: texture });
+        const sprite = new THREE.Sprite(material);
+        sprite.scale.set(2.2, 1.1, 1);
+        return sprite;
+    }
+
+    // Initialize tags on Fibonacci Sphere for even distribution
+    tagData.forEach((data, i) => {
+        const sprite = createTagPill(data.name, data.color);
+        
+        // Use Golden Ratio for even point distribution on sphere
+        const phi = Math.acos(-1 + (2 * i) / tagData.length);
+        const theta = Math.sqrt(tagData.length * Math.PI) * phi;
+
+        const pivot = new THREE.Object3D();
+        sprite.position.setFromSphericalCoords(2.5, phi, theta);
+        
+        pivot.add(sprite);
+        scene.add(pivot);
+        tagObjects.push(sprite);
+    });
+
+    // --- GUI CONTROLS ---
+    const settings = {
+        radius: 2.5,
+        orbOpacity: 0.2,
+        tagScale: 2.2,
+        wireframe: true
+    };
+
+    const gui = new GUI({ title: 'MCF Navigator Controls' });
+    
+    gui.add(settings, 'radius', 1.5, 8).name('Tag Orbit Radius').onChange(v => {
+        tagObjects.forEach(sprite => {
+            const pos = sprite.position.clone().normalize().multiplyScalar(v);
+            sprite.position.copy(pos);
+        });
+    });
+
+    gui.add(settings, 'tagScale', 0.5, 5).name('Tag Size').onChange(v => {
+        tagObjects.forEach(sprite => sprite.scale.set(v, v/2, 1));
+    });
+
+    gui.add(settings, 'orbOpacity', 0, 1).name('Sphere Opacity').onChange(v => {
+        orbMat.opacity = v;
+    });
+
+    gui.add(settings, 'wireframe').name('Show Wireframe').onChange(v => {
+        orbMat.wireframe = v;
+    });
+
+    // --- LIGHTING ---
+    const ambient = new THREE.AmbientLight(0xffffff, 1);
+    scene.add(ambient);
+
+    // --- RENDER LOOP ---
+    function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+    }
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    animate();
+</script>
+</body>
+</html>

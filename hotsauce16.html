@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Apple HotSauce Reproduction</title>
+    <style>
+        /* Modern reset with a 1996 Apple aesthetic */
+        body, html {
+            margin: 0; padding: 0; height: 100%;
+            background-color: #000; color: #fff;
+            font-family: "Geneva", "Chicago", "Helvetica", sans-serif;
+            display: flex; overflow: hidden;
+        }
+
+        /* --- X-SPACE VIEWPORT (LEFT) --- */
+        #x-space-container {
+            flex: 1.5;
+            position: relative;
+            background: #000;
+            overflow: hidden; /* This prevents tags from overlapping the sidebar */
+            perspective: 1200px;
+            border-right: 2px solid #333;
+        }
+
+        #scene {
+            position: absolute;
+            width: 100%; height: 100%;
+            transform-style: preserve-3d;
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        .tag {
+            position: absolute;
+            white-space: nowrap;
+            text-transform: uppercase;
+            font-weight: 900;
+            user-select: none;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+        }
+
+        /* HotSauce Hierarchy Logic */
+        .lvl-0 { color: #00FF00; font-size: 52px; transform: translateZ(400px); }
+        .lvl-1 { color: #FF3333; font-size: 32px; border: 2px solid #FF3333; padding: 4px 12px; }
+        .lvl-2 { color: #FFCC00; font-size: 22px; }
+        .lvl-3 { color: #CC66FF; font-size: 16px; opacity: 0.8; }
+
+        /* --- MCF DATA PANEL (RIGHT) --- */
+        #data-panel {
+            flex: 1;
+            background: #151515;
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+            z-index: 100; /* Ensures sidebar stays on top */
+            box-shadow: -10px 0 30px rgba(0,0,0,0.8);
+        }
+
+        h2 { font-size: 14px; color: #666; letter-spacing: 2px; margin-bottom: 20px; }
+        
+        pre {
+            background: #000;
+            padding: 20px;
+            border-left: 3px solid #00FF00;
+            font-family: "Monaco", "Courier New", monospace;
+            font-size: 13px;
+            color: #f1fa8c;
+            line-height: 1.6;
+            margin: 0;
+            overflow-y: auto;
+        }
+
+        .keyword { color: #ff79c6; }
+        .val { color: #8be9fd; }
+        .comment { color: #6272a4; font-style: italic; }
+
+        .hint {
+            margin-top: auto;
+            color: #444;
+            font-size: 11px;
+            border-top: 1px solid #222;
+            padding-top: 15px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="x-space-container">
+        <div id="scene">
+            <div class="tag lvl-0">Apple Site</div>
+
+            <div class="tag lvl-1" style="transform: translate3d(-300px, -120px, 100px);">Hardware</div>
+            <div class="tag lvl-2" style="transform: translate3d(-400px, -20px, -200px);">Macintosh</div>
+            <div class="tag lvl-3" style="transform: translate3d(-450px, 40px, -500px);">PowerMac G3</div>
+
+            <div class="tag lvl-1" style="transform: translate3d(250px, 100px, 100px);">Software</div>
+            <div class="tag lvl-2" style="transform: translate3d(350px, 180px, -200px);">Mac OS 8</div>
+            <div class="tag lvl-3" style="transform: translate3d(400px, 240px, -500px);">HotSauce.app</div>
+
+            <div class="tag lvl-1" style="transform: translate3d(0px, -220px, 50px);">Internet</div>
+            <div class="tag lvl-2" style="transform: translate3d(50px, -300px, -250px);">Cyberdog</div>
+        </div>
+    </div>
+
+    <div id="data-panel">
+        <h2>STRUCTURE: META CONTENT FRAMEWORK</h2>
+        <pre>
+<span class="comment"># MCF Version 0.95</span>
+<span class="comment"># Encoding: UTF-8</span>
+
+<span class="keyword">Unit:</span> AppleSite
+  <span class="keyword">name:</span> <span class="val">"Apple Computer"</span>
+  <span class="keyword">typeOf:</span> Category
+
+<span class="keyword">Unit:</span> Hardware
+  <span class="keyword">name:</span> <span class="val">"Hardware"</span>
+  <span class="keyword">parent:</span> AppleSite
+  <span class="keyword">pos:</span> <span class="val">"-300, -120, 100"</span>
+
+<span class="keyword">Unit:</span> Macintosh
+  <span class="keyword">name:</span> <span class="val">"Macintosh"</span>
+  <span class="keyword">parent:</span> Hardware
+  <span class="keyword">pos:</span> <span class="val">"-400, -20, -200"</span>
+
+<span class="keyword">Unit:</span> HotSauce
+  <span class="keyword">name:</span> <span class="val">"HotSauce.app"</span>
+  <span class="keyword">typeOf:</span> Application
+  <span class="keyword">parent:</span> Software
+        </pre>
+        
+        <div class="hint">
+            <strong>NAVIGATION:</strong> Move mouse to tilt X-Space.<br>
+            HotSauce (1996) used this MCF data to project URLs into 3D.
+        </div>
+    </div>
+
+    <script>
+        const scene = document.getElementById('scene');
+        const container = document.getElementById('x-space-container');
+
+        container.addEventListener('mousemove', (e) => {
+            const rect = container.getBoundingClientRect();
+            // Calculate mouse position relative to center of the viewport
+            const x = (e.clientX - rect.left) / rect.width - 0.5;
+            const y = (e.clientY - rect.top) / rect.height - 0.5;
+            
+            // Apply rotation and a slight translation to simulate "leaning" in
+            scene.style.transform = `
+                rotateY(${x * 50}deg) 
+                rotateX(${-y * 50}deg)
+                translateX(${-x * 50}px)
+                translateY(${-y * 50}px)
+            `;
+        });
+
+        // Smooth return to center
+        container.addEventListener('mouseleave', () => {
+            scene.style.transition = 'transform 0.8s ease-out';
+            scene.style.transform = `rotateY(0deg) rotateX(0deg)`;
+            setTimeout(() => { scene.style.transition = 'none'; }, 800);
+        });
+    </script>
+</body>
+</html>

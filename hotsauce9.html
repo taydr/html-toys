@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Tag Cloud Orb</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #050505; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+
+<script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+        }
+    }
+</script>
+
+<script type="module">
+    import * as THREE from 'three';
+
+    // --- SCENE SETUP ---
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    document.body.appendChild(renderer.domElement);
+
+    // --- CENTRAL ORB ---
+    const orbGeom = new THREE.SphereGeometry(2, 64, 64);
+    const orbMat = new THREE.MeshStandardMaterial({ 
+        color: 0x112244, 
+        wireframe: true,
+        transparent: true,
+        opacity: 0.3
+    });
+    const sphere = new THREE.Mesh(orbGeom, orbMat);
+    scene.add(sphere);
+
+    // Inner glow core
+    const coreGeom = new THREE.SphereGeometry(1.8, 32, 32);
+    const coreMat = new THREE.MeshPhongMaterial({ color: 0x0077ff, emissive: 0x0033ff });
+    const core = new THREE.Mesh(coreGeom, coreMat);
+    scene.add(core);
+
+    // --- LIGHTING ---
+    const light = new THREE.PointLight(0xffffff, 100, 100);
+    light.position.set(5, 5, 5);
+    scene.add(light);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+
+    camera.position.z = 10;
+
+    // --- TAG PILL CREATOR ---
+    function createTagPill(text, color) {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 512; // High res for clarity
+        canvas.height = 256;
+
+        // Draw Pill Background
+        ctx.fillStyle = color;
+        const radius = 60;
+        const x = 50, y = 80, w = 412, h = 100;
+        ctx.beginPath();
+        ctx.moveTo(x + radius, y);
+        ctx.lineTo(x + w - radius, y);
+        ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
+        ctx.lineTo(x + w, y + h - radius);
+        ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+        ctx.lineTo(x + radius, y + h);
+        ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
+        ctx.lineTo(x, y + radius);
+        ctx.quadraticCurveTo(x, y, x + radius, y);
+        ctx.closePath();
+        ctx.fill();
+
+        // Draw Text
+        ctx.font = 'bold 50px sans-serif';
+        ctx.fillStyle = 'white';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, canvas.width / 2, y + (h/2));
+
+        const texture = new THREE.CanvasTexture(canvas);
+        const material = new THREE.SpriteMaterial({ map: texture });
+        const sprite = new THREE.Sprite(material);
+        sprite.scale.set(2.5, 1.25, 1);
+        return sprite;
+    }
+
+    // --- GENERATE RANDOM ORBITS ---
+    const tagData = [
+        { name: 'JavaScript', color: '#f7df1e' },
+        { name: 'Three.js', color: '#ff4444' },
+        { name: 'WebGL', color: '#990000' },
+        { name: 'React', color: '#61dafb' },
+        { name: 'HTML5', color: '#e34f26' },
+        { name: 'CSS3', color: '#1572b6' },
+        { name: 'Python', color: '#3776ab' },
+        { name: 'AI/ML', color: '#00ffcc' }
+    ];
+
+    const tagGroups = [];
+
+    tagData.forEach((data, i) => {
+        const sprite = createTagPill(data.name, data.color);
+        
+        // Pivot allows us to rotate the group and have the sprite orbit the center
+        const pivot = new THREE.Object3D();
+        
+        // Randomize the starting orientation of the orbit
+        pivot.rotation.x = Math.random() * Math.PI * 2;
+        pivot.rotation.y = Math.random() * Math.PI * 2;
+        
+        // Offset the tag from the center
+        sprite.position.set(4, 0, 0); 
+        
+        pivot.add(sprite);
+        scene.add(pivot);
+        
+        tagGroups.push({
+            pivot: pivot,
+            speed: 0.005 + (Math.random() * 0.01)
+        });
+    });
+
+    // --- ANIMATION LOOP ---
+    function animate() {
+        requestAnimationFrame(animate);
+
+        tagGroups.forEach(group => {
+            group.pivot.rotation.z += group.speed;
+            group.pivot.rotation.y += group.speed * 0.5;
+        });
+
+        sphere.rotation.y += 0.002;
+        sphere.rotation.x += 0.001;
+
+        renderer.render(scene, camera);
+    }
+
+    // Handle Window Resize
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    animate();
+</script>
+</body>
+</html>
