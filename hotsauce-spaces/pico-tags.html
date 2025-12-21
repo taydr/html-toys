@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Pico Tags - HotSauce Browser</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body { margin: 0; display: flex; height: 100vh; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica; background: #000; color: #fff; overflow: hidden; }
+        #canvas-container { flex: 2; position: relative; border-right: 1px solid #444; }
+        #sidebar { flex: 1; background: #1a1a1a; padding: 20px; overflow-y: auto; }
+
+        /* Tree Selector */
+        .tree-selector { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+        .tree-btn { background: #333; border: none; color: #888; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+        .tree-btn:hover { background: #444; color: #fff; }
+        .tree-btn.active { background: #007aff; color: #fff; }
+
+        /* Hierarchy Styles */
+        .tree-node { margin-left: 15px; border-left: 1px solid #333; padding-left: 10px; cursor: pointer; transition: 0.2s; }
+        .tree-node.root { margin-left: 0; border-left: none; padding-left: 0; }
+        .node-label { padding: 4px 8px; border-radius: 4px; display: inline-block; }
+        .node-label:hover { background: #333; }
+        .active { background: #007aff !important; color: white; font-weight: bold; }
+
+        h2 { font-size: 14px; text-transform: uppercase; color: #888; margin-bottom: 15px; }
+        #tooltip { position: absolute; background: rgba(0,0,0,0.8); padding: 5px 10px; border-radius: 4px; pointer-events: none; display: none; }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container">
+        <div id="tooltip"></div>
+    </div>
+
+    <div id="sidebar">
+        <h2>Tag Tree</h2>
+        <div class="tree-selector" id="tree-selector"></div>
+        <div id="hierarchy-root"></div>
+    </div>
+
+<script>
+/**
+ * Tag trees derived from real patterns in Pico database
+ */
+const tagTrees = {
+    "products": {
+        id: "root",
+        label: "Pico Ecosystem",
+        color: 0x00ff00,
+        children: [
+            {
+                id: "spiral",
+                label: "Spiral",
+                color: 0x007aff,
+                children: [
+                    { id: "spiral-feed", label: "Feed Generation", color: 0x5ac8fa },
+                    { id: "spiral-personality", label: "AI Personality", color: 0x5ac8fa },
+                    { id: "spiral-suggestions", label: "Suggestions", color: 0x5ac8fa }
+                ]
+            },
+            {
+                id: "topolino",
+                label: "Topolino",
+                color: 0xff9500,
+                children: [
+                    { id: "topolino-mobile", label: "Mobile Capture", color: 0xffcc00 },
+                    { id: "topolino-sharing", label: "Shared Spaces", color: 0xffcc00 }
+                ]
+            },
+            {
+                id: "winnebago",
+                label: "Winnebago",
+                color: 0xff3b30,
+                children: [
+                    { id: "winnebago-sync", label: "Sync Engine", color: 0xff6b6b },
+                    { id: "winnebago-webdav", label: "WebDAV Backend", color: 0xff6b6b }
+                ]
+            },
+            {
+                id: "carbon",
+                label: "Carbon Model",
+                color: 0x4cd964,
+                children: [
+                    { id: "carbon-ancestry", label: "Ancestry Links", color: 0x34c759 },
+                    { id: "carbon-feed", label: "Feed Assembly", color: 0x34c759 },
+                    { id: "carbon-social", label: "Social Graph", color: 0x34c759 }
+                ]
+            }
+        ]
+    },
+
+    "navigation": {
+        id: "root",
+        label: "Navigation Design",
+        color: 0x00ff00,
+        children: [
+            {
+                id: "ancestry",
+                label: "Ancestry",
+                color: 0xa78bfa,
+                children: [
+                    { id: "ancestry-links", label: "Parent Links", color: 0xc4b5fd },
+                    { id: "ancestry-chains", label: "Thought Chains", color: 0xc4b5fd },
+                    { id: "ancestry-versions", label: "Version History", color: 0xc4b5fd }
+                ]
+            },
+            {
+                id: "search",
+                label: "Search",
+                color: 0x4ecdc4,
+                children: [
+                    { id: "search-related", label: "Related Content", color: 0x7dd3c4 },
+                    { id: "search-time", label: "Time Travel", color: 0x7dd3c4 },
+                    { id: "search-vellum", label: "Vellum Effect", color: 0x7dd3c4 }
+                ]
+            },
+            {
+                id: "sessions",
+                label: "Sessions",
+                color: 0xffd93d,
+                children: [
+                    { id: "sessions-explicit", label: "Explicit Sessions", color: 0xffe066 },
+                    { id: "sessions-flipflop", label: "Flip-Flop UI", color: 0xffe066 }
+                ]
+            },
+            {
+                id: "feed",
+                label: "Feed",
+                color: 0xff6b6b,
+                children: [
+                    { id: "feed-generation", label: "Generation", color: 0xff8a8a },
+                    { id: "feed-suggestions", label: "Suggestions", color: 0xff8a8a },
+                    { id: "feed-picoball", label: "PicoBall Actions", color: 0xff8a8a }
+                ]
+            }
+        ]
+    },
+
+    "patterns": {
+        id: "root",
+        label: "UI Patterns",
+        color: 0x00ff00,
+        children: [
+            {
+                id: "layouts",
+                label: "Layouts",
+                color: 0x007aff,
+                children: [
+                    { id: "layouts-polar", label: "Polar / Radial", color: 0x5ac8fa },
+                    { id: "layouts-spiral", label: "Spiral", color: 0x5ac8fa },
+                    { id: "layouts-grid", label: "Grid / Cards", color: 0x5ac8fa }
+                ]
+            },
+            {
+                id: "motion",
+                label: "Motion",
+                color: 0xff9500,
+                children: [
+                    { id: "motion-arcs", label: "Arc Transitions", color: 0xffcc00 },
+                    { id: "motion-lerp", label: "Smooth Flying", color: 0xffcc00 },
+                    { id: "motion-scale", label: "Salient Scaling", color: 0xffcc00 }
+                ]
+            },
+            {
+                id: "cards",
+                label: "Cards",
+                color: 0x4cd964,
+                children: [
+                    { id: "cards-text", label: "Text Cards", color: 0x34c759 },
+                    { id: "cards-links", label: "Link Cards", color: 0x34c759 },
+                    { id: "cards-images", label: "Image Cards", color: 0x34c759 },
+                    { id: "cards-chat", label: "Chat Cards", color: 0x34c759 }
+                ]
+            },
+            {
+                id: "clusters",
+                label: "Clusters",
+                color: 0xa78bfa,
+                children: [
+                    { id: "clusters-siblings", label: "Sibling Groups", color: 0xc4b5fd },
+                    { id: "clusters-annotations", label: "Annotations", color: 0xc4b5fd },
+                    { id: "clusters-headers", label: "Headers", color: 0xc4b5fd }
+                ]
+            }
+        ]
+    },
+
+    "ai": {
+        id: "root",
+        label: "AI Behavior",
+        color: 0x00ff00,
+        children: [
+            {
+                id: "personality",
+                label: "Personality",
+                color: 0xff6b6b,
+                children: [
+                    { id: "personality-tone", label: "Tone of Voice", color: 0xff8a8a },
+                    { id: "personality-therapeutic", label: "Too Therapeutic", color: 0xff8a8a },
+                    { id: "personality-probing", label: "Probing Questions", color: 0xff8a8a }
+                ]
+            },
+            {
+                id: "prompts",
+                label: "Prompts",
+                color: 0x4ecdc4,
+                children: [
+                    { id: "prompts-clarify", label: "Clarifications", color: 0x7dd3c4 },
+                    { id: "prompts-neutral", label: "Neutral Invites", color: 0x7dd3c4 },
+                    { id: "prompts-moral", label: "Moral Compass", color: 0x7dd3c4 }
+                ]
+            },
+            {
+                id: "agents",
+                label: "Agents",
+                color: 0xffd93d,
+                children: [
+                    { id: "agents-master", label: "Master Claude", color: 0xffe066 },
+                    { id: "agents-sub", label: "Sub-Agents", color: 0xffe066 },
+                    { id: "agents-research", label: "Research Threads", color: 0xffe066 }
+                ]
+            },
+            {
+                id: "suggestions",
+                label: "Suggestions",
+                color: 0xa78bfa,
+                children: [
+                    { id: "suggestions-sync", label: "Synchronous", color: 0xc4b5fd },
+                    { id: "suggestions-async", label: "Asynchronous", color: 0xc4b5fd },
+                    { id: "suggestions-woz", label: "Wizard of Oz", color: 0xc4b5fd }
+                ]
+            }
+        ]
+    },
+
+    "usecases": {
+        id: "root",
+        label: "Use Cases",
+        color: 0x00ff00,
+        children: [
+            {
+                id: "capture",
+                label: "Capture",
+                color: 0x007aff,
+                children: [
+                    { id: "capture-voice", label: "Voice / Dictation", color: 0x5ac8fa },
+                    { id: "capture-quick", label: "Quick Capture", color: 0x5ac8fa },
+                    { id: "capture-share", label: "Share Extension", color: 0x5ac8fa }
+                ]
+            },
+            {
+                id: "moodboard",
+                label: "Mood Boarding",
+                color: 0xff9500,
+                children: [
+                    { id: "moodboard-accretive", label: "Accretive", color: 0xffcc00 },
+                    { id: "moodboard-ambient", label: "Ambient", color: 0xffcc00 },
+                    { id: "moodboard-collab", label: "Collaborative", color: 0xffcc00 }
+                ]
+            },
+            {
+                id: "multidevice",
+                label: "Multi-Device",
+                color: 0x4cd964,
+                children: [
+                    { id: "multidevice-phone", label: "Phone Stand", color: 0x34c759 },
+                    { id: "multidevice-desktop", label: "Desktop Feed", color: 0x34c759 },
+                    { id: "multidevice-appliance", label: "Desk Appliance", color: 0x34c759 }
+                ]
+            },
+            {
+                id: "social",
+                label: "Social",
+                color: 0xff6b6b,
+                children: [
+                    { id: "social-sharing", label: "Ambient Sharing", color: 0xff8a8a },
+                    { id: "social-graph", label: "Friend Graph", color: 0xff8a8a },
+                    { id: "social-private", label: "Privacy Toggle", color: 0xff8a8a }
+                ]
+            }
+        ]
+    }
+};
+
+const treeLabels = {
+    "products": "Products",
+    "navigation": "Navigation",
+    "patterns": "UI Patterns",
+    "ai": "AI",
+    "usecases": "Use Cases"
+};
+
+let currentTree = "products";
+let scene, camera, renderer, raycaster, mouse;
+let nodeMeshes = [];
+let targetCameraPos = new THREE.Vector3(0, 0, 500);
+
+function init3D() {
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(75, (window.innerWidth * 0.66) / window.innerHeight, 1, 10000);
+    camera.position.z = 500;
+
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth * 0.66, window.innerHeight);
+    document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+    raycaster = new THREE.Raycaster();
+    mouse = new THREE.Vector2();
+
+    window.addEventListener('click', onCanvasClick);
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('resize', onResize);
+
+    animate();
+}
+
+function clearScene() {
+    nodeMeshes.forEach(mesh => scene.remove(mesh));
+    nodeMeshes = [];
+}
+
+function loadTree(treeName) {
+    currentTree = treeName;
+    clearScene();
+
+    // Update buttons
+    document.querySelectorAll('.tree-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tree === treeName);
+    });
+
+    // Rebuild 3D and sidebar
+    const data = tagTrees[treeName];
+    create3DNodes(data, 0, 0, 0);
+
+    document.getElementById('hierarchy-root').innerHTML = '';
+    renderHierarchy(data, document.getElementById('hierarchy-root'), true);
+
+    // Reset camera
+    targetCameraPos.set(0, 0, 500);
+    focusNode("root");
+}
+
+function create3DNodes(node, x, y, z, level = 0) {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = 256; canvas.height = 64;
+    ctx.fillStyle = '#' + node.color.toString(16).padStart(6, '0');
+    ctx.font = 'Bold 28px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(node.label, 128, 42);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+    const sprite = new THREE.Sprite(material);
+
+    sprite.scale.set(150, 40, 1);
+    sprite.position.set(x, y, z);
+    sprite.userData = { id: node.id, label: node.label };
+
+    scene.add(sprite);
+    nodeMeshes.push(sprite);
+
+    if (node.children) {
+        node.children.forEach((child, i) => {
+            const angle = (i / node.children.length) * Math.PI * 2;
+            const radius = 300 / (level + 1);
+            create3DNodes(child,
+                x + Math.cos(angle) * radius,
+                y + Math.sin(angle) * radius,
+                z - 400,
+                level + 1
+            );
+        });
+    }
+}
+
+function focusNode(id) {
+    const mesh = nodeMeshes.find(m => m.userData.id === id);
+    if (mesh) {
+        targetCameraPos.set(mesh.position.x, mesh.position.y, mesh.position.z + 200);
+
+        document.querySelectorAll('.node-label').forEach(el => el.classList.remove('active'));
+        const labelEl = document.getElementById('label-' + id);
+        if (labelEl) {
+            labelEl.classList.add('active');
+            labelEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    }
+}
+
+function onCanvasClick(event) {
+    const rect = renderer.domElement.getBoundingClientRect();
+    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObjects(nodeMeshes);
+
+    if (intersects.length > 0) {
+        focusNode(intersects[0].object.userData.id);
+    }
+}
+
+function onMouseMove(event) {
+    const tooltip = document.getElementById('tooltip');
+    const rect = renderer.domElement.getBoundingClientRect();
+    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObjects(nodeMeshes);
+
+    if (intersects.length > 0 && event.clientX < rect.right) {
+        tooltip.style.display = 'block';
+        tooltip.style.left = event.clientX + 10 + 'px';
+        tooltip.style.top = event.clientY + 10 + 'px';
+        tooltip.innerText = intersects[0].object.userData.label;
+    } else {
+        tooltip.style.display = 'none';
+    }
+}
+
+function onResize() {
+    camera.aspect = (window.innerWidth * 0.66) / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth * 0.66, window.innerHeight);
+}
+
+function animate() {
+    requestAnimationFrame(animate);
+    camera.position.lerp(targetCameraPos, 0.05);
+    renderer.render(scene, camera);
+}
+
+function renderHierarchy(node, container, isRoot = false) {
+    const div = document.createElement('div');
+    div.className = isRoot ? 'tree-node root' : 'tree-node';
+
+    const label = document.createElement('span');
+    label.className = 'node-label';
+    label.id = 'label-' + node.id;
+    label.innerText = node.label;
+    label.onclick = (e) => {
+        e.stopPropagation();
+        focusNode(node.id);
+    };
+
+    div.appendChild(label);
+    container.appendChild(div);
+
+    if (node.children) {
+        node.children.forEach(child => renderHierarchy(child, div));
+    }
+}
+
+function createTreeSelector() {
+    const selector = document.getElementById('tree-selector');
+    Object.keys(tagTrees).forEach(key => {
+        const btn = document.createElement('button');
+        btn.className = 'tree-btn';
+        btn.dataset.tree = key;
+        btn.innerText = treeLabels[key];
+        btn.onclick = () => loadTree(key);
+        selector.appendChild(btn);
+    });
+}
+
+// Initialize
+init3D();
+createTreeSelector();
+loadTree('products');
+</script>
+</body>
+</html>
