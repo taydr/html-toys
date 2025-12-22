@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Pico Tags + Cards - HotSauce Browser</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body { margin: 0; display: flex; height: 100vh; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica; background: #000; color: #fff; overflow: hidden; }
+        #canvas-container { flex: 2; position: relative; border-right: 1px solid #444; }
+        #sidebar { flex: 1; background: #1a1a1a; padding: 20px; overflow-y: auto; }
+
+        .tree-selector { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+        .tree-btn { background: #333; border: none; color: #888; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+        .tree-btn:hover { background: #444; color: #fff; }
+        .tree-btn.active { background: #007aff; color: #fff; }
+
+        .tree-node { margin-left: 15px; border-left: 1px solid #333; padding-left: 10px; cursor: pointer; transition: 0.2s; }
+        .tree-node.root { margin-left: 0; border-left: none; padding-left: 0; }
+        .node-label { padding: 4px 8px; border-radius: 4px; display: inline-block; }
+        .node-label:hover { background: #333; }
+        .active { background: #007aff !important; color: white; font-weight: bold; }
+
+        h2 { font-size: 14px; text-transform: uppercase; color: #888; margin-bottom: 15px; }
+        #tooltip { position: absolute; background: rgba(0,0,0,0.95); padding: 10px 14px; border-radius: 6px; pointer-events: none; display: none; max-width: 300px; font-size: 13px; line-height: 1.5; border: 1px solid #333; }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container">
+        <div id="tooltip"></div>
+    </div>
+
+    <div id="sidebar">
+        <h2>Tag Tree</h2>
+        <div class="tree-selector" id="tree-selector"></div>
+        <div id="hierarchy-root"></div>
+    </div>
+
+<script>
+/**
+ * Real cards from Pico database
+ */
+const realCards = [
+    { id: "c1", content: "I'm noticing I really don't like the personality of Spiral. It's kind of funny. But I really don't like its tone of voice and the kinds of questions it asks.", tags: ["spiral", "personality", "personality-tone"] },
+    { id: "c2", content: "Update: I forked spiral and implemented this. Experimenting with carbon-like structures is something we can experiment with on top of the existing structure.", tags: ["spiral", "carbon", "carbon-feed"] },
+    { id: "c3", content: "My favorite prompts are when it asks for clarifications. It's neutral, it's inviting, it's easy to answer.", tags: ["prompts", "prompts-clarify", "spiral-suggestions"] },
+    { id: "c4", content: "Actually, it's very therapeutic. And I don't necessarily mean that as a compliment. Sounds like a therapist. Therapy is work.", tags: ["personality", "personality-therapeutic", "spiral-personality"] },
+    { id: "c5", content: "Sometimes it sounds like a particularly annoying blue sky user. Why is it always trying to psychoanalyze me?", tags: ["personality", "personality-probing", "spiral-personality"] },
+    { id: "c6", content: "At the very least, objects should move along arcs instead of tangents. This is something I've wanted to try out for a long time.", tags: ["motion", "motion-arcs", "layouts"] },
+    { id: "c7", content: "Spiral is an obvious example. In terms of benefit to the team, our sense of momentum, those few days of effort have paid huge dividends.", tags: ["spiral", "spiral-feed"] },
+    { id: "c8", content: "Goal for tomorrow with respect to carbon ancestry and search sketching.", tags: ["carbon", "ancestry", "search"] },
+    { id: "c9", content: "TLDraw case studies for related content and search.", tags: ["search", "search-related", "moodboard"] },
+    { id: "c10", content: "Accretive mood-boarding like making a purchase", tags: ["moodboard", "moodboard-accretive"] },
+    { id: "c11", content: "Ambient mood boarding, like curiosity about a specific aesthetic.", tags: ["moodboard", "moodboard-ambient"] },
+    { id: "c12", content: "Collaborative mood boarding or other forms of aggregate collaboration.", tags: ["moodboard", "moodboard-collab", "social"] },
+    { id: "c13", content: "Related content as a PicoBall action.", tags: ["feed", "feed-picoball", "search-related"] },
+    { id: "c14", content: "Search as the n-minus-first page dot above the first session.", tags: ["search", "sessions", "feed"] },
+    { id: "c15", content: "Placing related content in suggestions. Stylizing related items as one or several suggestions.", tags: ["suggestions", "search-related", "feed-suggestions"] },
+    { id: "c16", content: "A key question, can we interleave past versions of the current node with other search results?", tags: ["ancestry", "search", "ancestry-versions"] },
+    { id: "c17", content: "Further thoughts on Ancestry and Search.", tags: ["ancestry", "search"] },
+    { id: "c18", content: "The point is, this is nothing to do with ancestry. It's just search results.", tags: ["search", "search-related"] },
+    { id: "c19", content: "Flipping through Topolino, I find myself wanting to long press to do tapbacks on interesting things.", tags: ["topolino", "topolino-sharing", "social"] },
+    { id: "c20", content: "This came up flipping through shared spaces on Topolino and dropping in the little comments.", tags: ["topolino", "topolino-sharing", "social-sharing"] },
+    { id: "c21", content: "Cards do have attribution in the data model. Winnebago shows name badges on individual cards.", tags: ["winnebago", "cards", "cards-text"] },
+    { id: "c22", content: "I think this is just because I'm not gleefully shooting myself in the foot ten times a day anymore, as was the case in the early days of the Winnebago.", tags: ["winnebago", "winnebago-sync"] },
+    { id: "c23", content: "Is it possible that vibe coding is blameless in the gradual collapse of the Winnebago?", tags: ["winnebago"] },
+    { id: "c24", content: "The Carbon model is THE THING. It actually allows the promiscuous, blithe modes of capture to coexist with a salient, comprehensible feed.", tags: ["carbon", "carbon-feed", "feed", "capture"] },
+    { id: "c25", content: "I really like feeling like I'm texting Pico. Using the keyboard on my phone to blast through feed items feels great.", tags: ["capture", "capture-quick", "multidevice-phone"] },
+    { id: "c26", content: "I also really like Pico feeling like an appliance on my desk, like it's a thing I can just reach out and talk to.", tags: ["multidevice", "multidevice-appliance", "capture"] },
+    { id: "c27", content: "Something I tried doing tonight is using two instances of Pico at once. Topolino on my phone and Spiral on my computer.", tags: ["multidevice", "topolino", "spiral", "multidevice-desktop"] },
+    { id: "c28", content: "Pico is my schizoposting app. Genuinely looks like the ramblings of an insane person here.", tags: ["capture", "feed"] },
+    { id: "c29", content: "I really hate being asked to think by Pico, especially when it feels contrived. These are low-energy moments.", tags: ["prompts", "personality", "feed"] },
+    { id: "c30", content: "Most of my captures are single cards. I don't know what that indicates.", tags: ["cards", "cards-text", "capture"] },
+    { id: "c31", content: "When I use Spiral, I'm noticing how seldom I want to do more than one suggestion per space.", tags: ["spiral", "suggestions", "suggestions-sync"] },
+    { id: "c32", content: "Can Pico be a Twitter client?", tags: ["social", "capture"] },
+    { id: "c33", content: "In my usage, Pico is kind of a diary, kind of a note-taking tool, kind of a blog, kind of Twitter.", tags: ["capture", "social"] },
+    { id: "c34", content: "I want pico to suggest Deep Research prompts to kick off, review next morning", tags: ["suggestions", "agents", "agents-research"] },
+    { id: "c35", content: "Geoffrey's team at Notion got agents to do what they wanted by collecting an eval set of positive and negative examples.", tags: ["agents", "agents-master"] },
+    { id: "c36", content: "Should we have a hierarchy of claude threads in Spiral such that there's a master Claude that handles scheduling?", tags: ["agents", "agents-master", "agents-sub", "spiral"] },
+    { id: "c37", content: "Might we benefit from hiring a junior engineer who is simply very good at following instructions?", tags: ["agents"] },
+    { id: "c38", content: "What if we timed meetings by length of incense stick?", tags: ["capture"] },
+    { id: "c39", content: "Pico, help me understand the history of using Koro as timekeeping devices.", tags: ["capture", "capture-voice"] },
+    { id: "c40", content: "noticing that Spiral is affecting how I capture. I will leave notes for Claude in my captures.", tags: ["spiral", "capture", "agents"] },
+    { id: "c41", content: "I wish we had a faster way to test prompts in this system. This feedback loop is really slow.", tags: ["prompts", "feed-generation"] },
+    { id: "c42", content: "Going back to a single item feed, it's strange that I actually don't feel like much is missing.", tags: ["feed", "feed-generation"] },
+    { id: "c43", content: "I want to see new content. It's okay if there are some items where I'm providing new context for the model.", tags: ["feed", "suggestions"] },
+    { id: "c44", content: "World lines are a great way to visualize our model", tags: ["layouts", "ancestry"] },
+    { id: "c45", content: "time travel interface inspo", tags: ["search-time", "ancestry-versions"] },
+    { id: "c46", content: "Connect this workspace to an existing workspace using a link button or talking to Pico.", tags: ["sessions", "ancestry-links", "search"] },
+    { id: "c47", content: "Swipe up once to access search with previous sessions.", tags: ["sessions", "sessions-explicit", "search"] },
+    { id: "c48", content: "We can reuse the lateral between workspaces animation for moving between items in history.", tags: ["sessions", "motion", "ancestry"] },
+    { id: "c49", content: "clusters — non hierarchical aggregates of siblings", tags: ["clusters", "clusters-siblings", "layouts"] },
+    { id: "c50", content: "Annotations — notes that talk about some other note. This seems like piling?", tags: ["clusters", "clusters-annotations", "cards"] },
+    { id: "c51", content: "Headers — large typographic descriptors of collections of related cards", tags: ["clusters", "clusters-headers", "cards"] },
+    { id: "c52", content: "Imagine sharing is a single toggle on any capture, and Pico surfaces to whoever it thinks might want to see it.", tags: ["social", "social-sharing", "carbon-social"] },
+    { id: "c53", content: "When I'm at work, almost everything I capture is something I want to share.", tags: ["social", "social-sharing", "capture"] },
+    { id: "c54", content: "pico is giving claude a body and face that's shaped like human attention and memory", tags: ["agents", "carbon"] },
+    { id: "c55", content: "chatbot but instead of messages back and forth, it's one-off interactive iPhone screens.", tags: ["feed", "suggestions-sync", "multidevice-phone"] },
+    { id: "c56", content: "The lack of imagery really makes this less fun, even if the imagery isn't part of the content I captured.", tags: ["cards", "cards-images", "feed"] },
+    { id: "c57", content: "I find myself copying screenshots of PicoSpaces into ChatGPT pretty frequently.", tags: ["capture", "agents"] },
+    { id: "c58", content: "How I'm starting to see this thing", tags: ["feed", "carbon"] },
+    { id: "c59", content: "Of course, the optimal expression of this product may contain features beyond this. But the feed is the ineradicable essence.", tags: ["feed", "carbon-feed"] },
+    { id: "c60", content: "do we need chat cards in the carbon model?", tags: ["cards", "cards-chat", "carbon"] }
+];
+
+const tagTrees = {
+    "products": {
+        id: "root", label: "Pico Ecosystem", color: 0x00ff00,
+        children: [
+            { id: "spiral", label: "Spiral", color: 0x007aff, children: [
+                { id: "spiral-feed", label: "Feed Generation", color: 0x5ac8fa },
+                { id: "spiral-personality", label: "AI Personality", color: 0x5ac8fa },
+                { id: "spiral-suggestions", label: "Suggestions", color: 0x5ac8fa }
+            ]},
+            { id: "topolino", label: "Topolino", color: 0xff9500, children: [
+                { id: "topolino-mobile", label: "Mobile Capture", color: 0xffcc00 },
+                { id: "topolino-sharing", label: "Shared Spaces", color: 0xffcc00 }
+            ]},
+            { id: "winnebago", label: "Winnebago", color: 0xff3b30, children: [
+                { id: "winnebago-sync", label: "Sync Engine", color: 0xff6b6b },
+                { id: "winnebago-webdav", label: "WebDAV Backend", color: 0xff6b6b }
+            ]},
+            { id: "carbon", label: "Carbon Model", color: 0x4cd964, children: [
+                { id: "carbon-ancestry", label: "Ancestry Links", color: 0x34c759 },
+                { id: "carbon-feed", label: "Feed Assembly", color: 0x34c759 },
+                { id: "carbon-social", label: "Social Graph", color: 0x34c759 }
+            ]}
+        ]
+    },
+    "navigation": {
+        id: "root", label: "Navigation Design", color: 0x00ff00,
+        children: [
+            { id: "ancestry", label: "Ancestry", color: 0xa78bfa, children: [
+                { id: "ancestry-links", label: "Parent Links", color: 0xc4b5fd },
+                { id: "ancestry-chains", label: "Thought Chains", color: 0xc4b5fd },
+                { id: "ancestry-versions", label: "Version History", color: 0xc4b5fd }
+            ]},
+            { id: "search", label: "Search", color: 0x4ecdc4, children: [
+                { id: "search-related", label: "Related Content", color: 0x7dd3c4 },
+                { id: "search-time", label: "Time Travel", color: 0x7dd3c4 },
+                { id: "search-vellum", label: "Vellum Effect", color: 0x7dd3c4 }
+            ]},
+            { id: "sessions", label: "Sessions", color: 0xffd93d, children: [
+                { id: "sessions-explicit", label: "Explicit Sessions", color: 0xffe066 },
+                { id: "sessions-flipflop", label: "Flip-Flop UI", color: 0xffe066 }
+            ]},
+            { id: "feed", label: "Feed", color: 0xff6b6b, children: [
+                { id: "feed-generation", label: "Generation", color: 0xff8a8a },
+                { id: "feed-suggestions", label: "Suggestions", color: 0xff8a8a },
+                { id: "feed-picoball", label: "PicoBall Actions", color: 0xff8a8a }
+            ]}
+        ]
+    },
+    "patterns": {
+        id: "root", label: "UI Patterns", color: 0x00ff00,
+        children: [
+            { id: "layouts", label: "Layouts", color: 0x007aff, children: [
+                { id: "layouts-polar", label: "Polar / Radial", color: 0x5ac8fa },
+                { id: "layouts-spiral", label: "Spiral", color: 0x5ac8fa },
+                { id: "layouts-grid", label: "Grid / Cards", color: 0x5ac8fa }
+            ]},
+            { id: "motion", label: "Motion", color: 0xff9500, children: [
+                { id: "motion-arcs", label: "Arc Transitions", color: 0xffcc00 },
+                { id: "motion-lerp", label: "Smooth Flying", color: 0xffcc00 },
+                { id: "motion-scale", label: "Salient Scaling", color: 0xffcc00 }
+            ]},
+            { id: "cards", label: "Cards", color: 0x4cd964, children: [
+                { id: "cards-text", label: "Text Cards", color: 0x34c759 },
+                { id: "cards-links", label: "Link Cards", color: 0x34c759 },
+                { id: "cards-images", label: "Image Cards", color: 0x34c759 },
+                { id: "cards-chat", label: "Chat Cards", color: 0x34c759 }
+            ]},
+            { id: "clusters", label: "Clusters", color: 0xa78bfa, children: [
+                { id: "clusters-siblings", label: "Sibling Groups", color: 0xc4b5fd },
+                { id: "clusters-annotations", label: "Annotations", color: 0xc4b5fd },
+                { id: "clusters-headers", label: "Headers", color: 0xc4b5fd }
+            ]}
+        ]
+    },
+    "ai": {
+        id: "root", label: "AI Behavior", color: 0x00ff00,
+        children: [
+            { id: "personality", label: "Personality", color: 0xff6b6b, children: [
+                { id: "personality-tone", label: "Tone of Voice", color: 0xff8a8a },
+                { id: "personality-therapeutic", label: "Too Therapeutic", color: 0xff8a8a },
+                { id: "personality-probing", label: "Probing Questions", color: 0xff8a8a }
+            ]},
+            { id: "prompts", label: "Prompts", color: 0x4ecdc4, children: [
+                { id: "prompts-clarify", label: "Clarifications", color: 0x7dd3c4 },
+                { id: "prompts-neutral", label: "Neutral Invites", color: 0x7dd3c4 },
+                { id: "prompts-moral", label: "Moral Compass", color: 0x7dd3c4 }
+            ]},
+            { id: "agents", label: "Agents", color: 0xffd93d, children: [
+                { id: "agents-master", label: "Master Claude", color: 0xffe066 },
+                { id: "agents-sub", label: "Sub-Agents", color: 0xffe066 },
+                { id: "agents-research", label: "Research Threads", color: 0xffe066 }
+            ]},
+            { id: "suggestions", label: "Suggestions", color: 0xa78bfa, children: [
+                { id: "suggestions-sync", label: "Synchronous", color: 0xc4b5fd },
+                { id: "suggestions-async", label: "Asynchronous", color: 0xc4b5fd },
+                { id: "suggestions-woz", label: "Wizard of Oz", color: 0xc4b5fd }
+            ]}
+        ]
+    },
+    "usecases": {
+        id: "root", label: "Use Cases", color: 0x00ff00,
+        children: [
+            { id: "capture", label: "Capture", color: 0x007aff, children: [
+                { id: "capture-voice", label: "Voice / Dictation", color: 0x5ac8fa },
+                { id: "capture-quick", label: "Quick Capture", color: 0x5ac8fa },
+                { id: "capture-share", label: "Share Extension", color: 0x5ac8fa }
+            ]},
+            { id: "moodboard", label: "Mood Boarding", color: 0xff9500, children: [
+                { id: "moodboard-accretive", label: "Accretive", color: 0xffcc00 },
+                { id: "moodboard-ambient", label: "Ambient", color: 0xffcc00 },
+                { id: "moodboard-collab", label: "Collaborative", color: 0xffcc00 }
+            ]},
+            { id: "multidevice", label: "Multi-Device", color: 0x4cd964, children: [
+                { id: "multidevice-phone", label: "Phone Stand", color: 0x34c759 },
+                { id: "multidevice-desktop", label: "Desktop Feed", color: 0x34c759 },
+                { id: "multidevice-appliance", label: "Desk Appliance", color: 0x34c759 }
+            ]},
+            { id: "social", label: "Social", color: 0xff6b6b, children: [
+                { id: "social-sharing", label: "Ambient Sharing", color: 0xff8a8a },
+                { id: "social-graph", label: "Friend Graph", color: 0xff8a8a },
+                { id: "social-private", label: "Privacy Toggle", color: 0xff8a8a }
+            ]}
+        ]
+    }
+};
+
+const treeLabels = { "products": "Products", "navigation": "Navigation", "patterns": "UI Patterns", "ai": "AI", "usecases": "Use Cases" };
+
+let currentTree = "products";
+let focusedNodeId = "root";
+let scene, camera, renderer, raycaster, mouse;
+let tagMeshes = [];
+let cardMeshes = [];
+let targetCameraPos = new THREE.Vector3(0, 0, 500);
+
+function init3D() {
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(75, (window.innerWidth * 0.66) / window.innerHeight, 1, 10000);
+    camera.position.z = 500;
+
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth * 0.66, window.innerHeight);
+    renderer.sortObjects = true;
+    document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+    raycaster = new THREE.Raycaster();
+    mouse = new THREE.Vector2();
+
+    window.addEventListener('click', onCanvasClick);
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('resize', onResize);
+
+    animate();
+}
+
+function clearScene() {
+    tagMeshes.forEach(mesh => scene.remove(mesh));
+    cardMeshes.forEach(obj => scene.remove(obj.mesh));
+    tagMeshes = [];
+    cardMeshes = [];
+}
+
+function loadTree(treeName) {
+    currentTree = treeName;
+    clearScene();
+
+    document.querySelectorAll('.tree-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tree === treeName);
+    });
+
+    const data = tagTrees[treeName];
+    create3DNodes(data, 0, 0, 0);
+
+    document.getElementById('hierarchy-root').innerHTML = '';
+    renderHierarchy(data, document.getElementById('hierarchy-root'), true);
+
+    targetCameraPos.set(0, 0, 500);
+    focusNode("root");
+}
+
+function getCardsForTag(tagId) {
+    return realCards.filter(c => c.tags.includes(tagId));
+}
+
+function create3DNodes(node, x, y, z, level = 0) {
+    // Create tag sprite
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = 256; canvas.height = 64;
+    ctx.fillStyle = '#' + node.color.toString(16).padStart(6, '0');
+    ctx.font = 'Bold 28px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(node.label, 128, 42);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false });
+    const sprite = new THREE.Sprite(material);
+
+    sprite.scale.set(150, 40, 1);
+    sprite.position.set(x, y, z);
+    sprite.userData = { id: node.id, label: node.label, isTag: true };
+    sprite.renderOrder = 1;
+
+    scene.add(sprite);
+    tagMeshes.push(sprite);
+
+    // Create card sprites for this tag
+    const cards = getCardsForTag(node.id);
+    cards.forEach((card, i) => {
+        const cardSprite = createCardSprite(card.content);
+
+        const count = cards.length;
+        
+        // Increased spacing between cards when expanded
+        const cardWidth = 120;  // Width of each card
+        const cardGap = 25;     // Gap between cards
+        const totalWidth = count * cardWidth + (count - 1) * cardGap;
+        
+        // Expanded: fan out below tag with more spacing
+        const expandedX = x + (i - (count - 1) / 2) * (cardWidth + cardGap);
+        const expandedY = y - 90 - (i % 2) * 25;  // More vertical offset and stagger
+        const expandedZ = z + 5;
+
+        // Piled: stack tightly (unchanged behavior)
+        const piledX = x + (i - (count - 1) / 2) * 3;
+        const piledY = y - 35 - i * 2;
+        const piledZ = z + 2 + i * 0.5;
+
+        cardSprite.position.set(piledX, piledY, piledZ);
+        cardSprite.userData = {
+            id: card.id,
+            label: card.content,
+            parentTagId: node.id,
+            isCard: true,
+            expandedPos: new THREE.Vector3(expandedX, expandedY, expandedZ),
+            piledPos: new THREE.Vector3(piledX, piledY, piledZ),
+            expandedScale: new THREE.Vector3(120, 60, 1),  // Taller cards for wrapped text
+            piledScale: new THREE.Vector3(40, 20, 1),
+            baseRenderOrder: i
+        };
+        cardSprite.scale.set(40, 20, 1);
+        cardSprite.renderOrder = 0;
+
+        scene.add(cardSprite);
+        cardMeshes.push({ mesh: cardSprite, parentTagId: node.id });
+    });
+
+    if (node.children) {
+        node.children.forEach((child, i) => {
+            const angle = (i / node.children.length) * Math.PI * 2;
+            const radius = 300 / (level + 1);
+            create3DNodes(child, x + Math.cos(angle) * radius, y + Math.sin(angle) * radius, z - 400, level + 1);
+        });
+    }
+}
+
+function wrapText(ctx, text, maxWidth, lineHeight) {
+    const words = text.split(' ');
+    const lines = [];
+    let currentLine = '';
+
+    for (let word of words) {
+        const testLine = currentLine ? currentLine + ' ' + word : word;
+        const metrics = ctx.measureText(testLine);
+        
+        if (metrics.width > maxWidth && currentLine) {
+            lines.push(currentLine);
+            currentLine = word;
+        } else {
+            currentLine = testLine;
+        }
+    }
+    if (currentLine) {
+        lines.push(currentLine);
+    }
+    
+    return lines;
+}
+
+function createCardSprite(text) {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = 320;
+    canvas.height = 160;
+
+    // White card with subtle shadow
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.15)';
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetY = 2;
+    ctx.fillStyle = '#ffffff';
+    roundRect(ctx, 8, 8, 304, 144, 8);
+    ctx.fill();
+    
+    // Reset shadow for text
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
+
+    // Text with wrapping
+    ctx.fillStyle = '#222';
+    ctx.font = '15px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+
+    const padding = 20;
+    const maxWidth = canvas.width - padding * 2;
+    const lineHeight = 20;
+    const maxLines = 5;
+    
+    let lines = wrapText(ctx, text, maxWidth, lineHeight);
+    
+    // Truncate if too many lines
+    if (lines.length > maxLines) {
+        lines = lines.slice(0, maxLines);
+        lines[maxLines - 1] = lines[maxLines - 1].slice(0, -3) + '...';
+    }
+    
+    // Center text block vertically
+    const totalTextHeight = lines.length * lineHeight;
+    const startY = (canvas.height - totalTextHeight) / 2;
+    
+    lines.forEach((line, i) => {
+        ctx.fillText(line, padding, startY + i * lineHeight);
+    });
+
+    const texture = new THREE.CanvasTexture(canvas);
+    const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false });
+    const sprite = new THREE.Sprite(material);
+    return sprite;
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+}
+
+function focusNode(id) {
+    focusedNodeId = id;
+    const mesh = tagMeshes.find(m => m.userData.id === id);
+    if (mesh) {
+        targetCameraPos.set(mesh.position.x, mesh.position.y, mesh.position.z + 250);
+        document.querySelectorAll('.node-label').forEach(el => el.classList.remove('active'));
+        const labelEl = document.getElementById('label-' + id);
+        if (labelEl) {
+            labelEl.classList.add('active');
+            labelEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    }
+}
+
+function onCanvasClick(event) {
+    const rect = renderer.domElement.getBoundingClientRect();
+    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
+
+    const tagIntersects = raycaster.intersectObjects(tagMeshes);
+    if (tagIntersects.length > 0) {
+        focusNode(tagIntersects[0].object.userData.id);
+        return;
+    }
+
+    const cardIntersects = raycaster.intersectObjects(cardMeshes.map(c => c.mesh));
+    if (cardIntersects.length > 0) {
+        focusNode(cardIntersects[0].object.userData.parentTagId);
+    }
+}
+
+function onMouseMove(event) {
+    const tooltip = document.getElementById('tooltip');
+    const rect = renderer.domElement.getBoundingClientRect();
+    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
+
+    const allMeshes = [...tagMeshes, ...cardMeshes.map(c => c.mesh)];
+    const intersects = raycaster.intersectObjects(allMeshes);
+
+    if (intersects.length > 0 && event.clientX < rect.right) {
+        tooltip.style.display = 'block';
+        tooltip.style.left = event.clientX + 12 + 'px';
+        tooltip.style.top = event.clientY + 12 + 'px';
+        tooltip.innerText = intersects[0].object.userData.label;
+    } else {
+        tooltip.style.display = 'none';
+    }
+}
+
+function onResize() {
+    camera.aspect = (window.innerWidth * 0.66) / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth * 0.66, window.innerHeight);
+}
+
+function animate() {
+    requestAnimationFrame(animate);
+
+    camera.position.lerp(targetCameraPos, 0.05);
+
+    // Animate cards
+    cardMeshes.forEach(({ mesh, parentTagId }) => {
+        const data = mesh.userData;
+        const isFocused = (parentTagId === focusedNodeId);
+        const targetPos = isFocused ? data.expandedPos : data.piledPos;
+        const targetScale = isFocused ? data.expandedScale : data.piledScale;
+
+        mesh.position.lerp(targetPos, 0.1);
+        mesh.scale.lerp(targetScale, 0.1);
+        mesh.renderOrder = isFocused ? 10 + data.baseRenderOrder : data.baseRenderOrder;
+    });
+
+    renderer.render(scene, camera);
+}
+
+function renderHierarchy(node, container, isRoot = false) {
+    const div = document.createElement('div');
+    div.className = isRoot ? 'tree-node root' : 'tree-node';
+
+    const label = document.createElement('span');
+    label.className = 'node-label';
+    label.id = 'label-' + node.id;
+    label.innerText = node.label;
+
+    const cardCount = getCardsForTag(node.id).length;
+    if (cardCount > 0) {
+        const badge = document.createElement('span');
+        badge.style.cssText = 'margin-left: 6px; background: #333; padding: 2px 6px; border-radius: 10px; font-size: 10px; color: #888;';
+        badge.innerText = cardCount;
+        label.appendChild(badge);
+    }
+
+    label.onclick = (e) => { e.stopPropagation(); focusNode(node.id); };
+    div.appendChild(label);
+    container.appendChild(div);
+
+    if (node.children) {
+        node.children.forEach(child => renderHierarchy(child, div));
+    }
+}
+
+function createTreeSelector() {
+    const selector = document.getElementById('tree-selector');
+    Object.keys(tagTrees).forEach(key => {
+        const btn = document.createElement('button');
+        btn.className = 'tree-btn';
+        btn.dataset.tree = key;
+        btn.innerText = treeLabels[key];
+        btn.onclick = () => loadTree(key);
+        selector.appendChild(btn);
+    });
+}
+
+init3D();
+createTreeSelector();
+loadTree('products');
+</script>
+</body>
+</html>
