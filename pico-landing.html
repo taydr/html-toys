@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Program Yourself - Designer Mode</title>
+    <title>Program your self - Designer Mode</title>
     <style>
         body {
             background-color: black;
@@ -142,7 +142,7 @@
 </head>
 <body>
 
-    <div id="terminal-text">program yourself</div>
+    <div id="terminal-text">program your self</div>
 
     <div id="controls-overlay">
         <h2>Sequence Designer</h2>
@@ -177,7 +177,7 @@
         const element = document.getElementById('terminal-text');
         
         // --- UPDATED BASE STRING ---
-        const baseString = "program yourself"; 
+        const baseString = "program your self"; 
         
         const glitchChars = '!<>-_\\/[]{}—=+*^?#';
 
@@ -189,15 +189,15 @@
         };
 
         // --- Data State ---
-        // Indices updated to fit the 16-character string "program yourself"
+        // Indices updated to fit the 16-character string "program your self"
         let glitches = [
-            { index: 2,  face: "^_^" },   // pr^_^am yourself
+            { index: 2,  face: "^_^" },   // pr^_^am your self
             { index: 8,  face: "._." },   // program ._.rself (Replaces 'you')
             { index: 4,  face: "(o_o)" }, // prog(o_o)urself (Consumes middle space)
             { index: 8,  face: "@<@" },   // program @<@rself
             { index: 13, face: "T_T" },   // program yoursT_T (End of string)
             { index: 6,  face: ">w<" },   // progra>w<ourself
-            { index: 0,  face: ">3>" },   // >3>gram yourself
+            { index: 0,  face: ">3>" },   // >3>gram your self
             { index: 12, face: "•o•" }    // program your•o•f
         ];
 
