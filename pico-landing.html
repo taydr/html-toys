@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Programmable Attention - Designer Mode</title>
+    <title>Program Yourself - Designer Mode</title>
     <style>
         body {
             background-color: black;
@@ -142,7 +142,7 @@
 </head>
 <body>
 
-    <div id="terminal-text">programmable attention</div>
+    <div id="terminal-text">program yourself</div>
 
     <div id="controls-overlay">
         <h2>Sequence Designer</h2>
@@ -175,11 +175,13 @@
 
     <script>
         const element = document.getElementById('terminal-text');
-        const baseString = "programmable attention";
+        
+        // --- UPDATED BASE STRING ---
+        const baseString = "program yourself"; 
+        
         const glitchChars = '!<>-_\\/[]{}—=+*^?#';
 
         // --- Configuration State ---
-        // Defaults updated to match your request
         const config = {
             scrambleDuration: 30, 
             scrambleFrames: 4,     
@@ -187,16 +189,16 @@
         };
 
         // --- Data State ---
-        // Updated based on your request
+        // Indices updated to fit the 16-character string "program yourself"
         let glitches = [
-            { index: 2,  face: "^_^" },   // pr^_^ammable attention
-            { index: 13, face: "._." },   // programmable ._.ention
-            { index: 6,  face: "(o_o)" }, // progra(o_o)e attention
-            { index: 13, face: "@<@" },   // programmable @<@ention
-            { index: 18, face: "T_T" },   // programmable attenT_Tn
-            { index: 9,  face: ">w<" },   // programma>w< attention
-            { index: 0,  face: ">3>" },   // >3>grammable attention
-            { index: 19, face: "•o•" }    // programmable attent•o•
+            { index: 2,  face: "^_^" },   // pr^_^am yourself
+            { index: 8,  face: "._." },   // program ._.rself (Replaces 'you')
+            { index: 4,  face: "(o_o)" }, // prog(o_o)urself (Consumes middle space)
+            { index: 8,  face: "@<@" },   // program @<@rself
+            { index: 13, face: "T_T" },   // program yoursT_T (End of string)
+            { index: 6,  face: ">w<" },   // progra>w<ourself
+            { index: 0,  face: ">3>" },   // >3>gram yourself
+            { index: 12, face: "•o•" }    // program your•o•f
         ];
 
         // --- Helpers ---
